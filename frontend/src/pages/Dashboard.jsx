@@ -1,0 +1,654 @@
+import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import Navbar from "../components/Navbar";
+import GuidelinesCard from "../components/GuidelinesCard";
+import ChartCard from "../components/ChartCard";
+import ProjectForm from "../components/ProjectForm";
+import TaskForm from "../components/TaskForm";
+import UserForm from "../components/UserForm";
+import { getDashboardData } from "../services/dashboardService";
+import { fetchProjects, createProject, updateProject } from "../services/projectService";
+import { fetchTasks, createTask, updateTask } from "../services/taskService";
+import { fetchUsers, createUser, updateUser } from "../services/userService";
+import { FaArrowsRotate } from "react-icons/fa6";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
+  ResponsiveContainer,
+  CartesianGrid,
+} from "recharts";
+
+const COLORS = {
+  "Not Started": "#f97316",
+  "In Progress": "#3b82f6",
+  "Completed": "#10b981",
+  overdue: "#ef4444",
+};
+
+export default function Dashboard() {
+  const [dashboard, setDashboard] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  
+  // Modal states
+  const [showProjectModal, setShowProjectModal] = useState(false);
+  const [showTaskModal, setShowTaskModal] = useState(false);
+  const [showUserModal, setShowUserModal] = useState(false);
+  const [editingProject, setEditingProject] = useState(null);
+  const [editingTask, setEditingTask] = useState(null);
+  const [editingUser, setEditingUser] = useState(null);
+  
+  // Data for forms
+  const [projects, setProjects] = useState([]);
+  const [users, setUsers] = useState([]);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await getDashboardData();
+      setDashboard(data);
+    } catch (err) {
+      console.error("Error loading dashboard data:", err);
+      setError(err.response?.data?.message || "Failed to load dashboard data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+    loadProjects();
+    loadUsers();
+  }, []);
+
+  const loadProjects = async () => {
+    try {
+      const data = await fetchProjects();
+      setProjects(data);
+    } catch (error) {
+      console.error("Error loading projects:", error);
+    }
+  };
+
+  const loadUsers = async () => {
+    try {
+      const data = await fetchUsers();
+      setUsers(data);
+    } catch (error) {
+      console.error("Error loading users:", error);
+    }
+  };
+
+  const handleProjectSave = async (form) => {
+    try {
+      if (editingProject?.id) {
+        await updateProject(editingProject.id, form);
+      } else {
+        await createProject(form);
+      }
+      setShowProjectModal(false);
+      setEditingProject(null);
+      await loadProjects();
+      await fetchData(); // Refresh dashboard
+    } catch (error) {
+      console.error("Error saving project:", error);
+      alert("Failed to save project. Please try again.");
+    }
+  };
+
+  const handleTaskSave = async (form) => {
+    try {
+      if (editingTask?.id) {
+        await updateTask(editingTask.id, form);
+      } else {
+        await createTask(form);
+      }
+      setShowTaskModal(false);
+      setEditingTask(null);
+      await fetchData(); // Refresh dashboard
+    } catch (error) {
+      console.error("Error saving task:", error);
+      alert("Failed to save task. Please try again.");
+    }
+  };
+
+  const handleUserSave = async (form) => {
+    try {
+      if (editingUser?.id) {
+        await updateUser(editingUser.id, form);
+      } else {
+        await createUser(form);
+      }
+      setShowUserModal(false);
+      setEditingUser(null);
+      await loadUsers();
+      await fetchData(); // Refresh dashboard
+    } catch (error) {
+      console.error("Error saving user:", error);
+      alert("Failed to save user. Please try again.");
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !dashboard) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="bg-white p-8 rounded-lg shadow-lg max-w-md">
+            <p className="text-xl text-red-600 mb-4">
+              {error || "Failed to load dashboard data"}
+            </p>
+            <p className="text-sm text-gray-500 mb-4">
+              Please make sure the backend server is running on http://localhost:5000
+            </p>
+            <button
+              onClick={fetchData}
+              className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <FaArrowsRotate className="inline mr-2" />
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Prepare data for charts - ensure we have valid data
+  const statusCounts = dashboard.statusCounts || {};
+  const statusChartData = Object.entries(statusCounts)
+    .filter(([_, value]) => value > 0) // Only show statuses with tasks
+    .map(([name, value]) => ({ name, value }));
+
+  const projectChartData = (dashboard.projectCompletion || [])
+    .slice(0, 10) // Show top 10 projects
+    .map((project) => ({
+      name: project.project.length > 15 
+        ? project.project.substring(0, 15) + "..." 
+        : project.project,
+      progress: project.progress,
+      fullName: project.project,
+    }));
+
+  const employeeWorkloadData = Object.entries(dashboard.employeeWorkload || {})
+    .slice(0, 10) // Show top 10 employees
+    .map(([name, value]) => ({
+      name: name.includes("@") ? name.split("@")[0] : name,
+      tasks: value,
+      fullEmail: name,
+    }))
+    .sort((a, b) => b.tasks - a.tasks);
+
+  const completedTasks = dashboard.statusCounts?.Completed || 0;
+  const totalTasks = dashboard.totalTasks || 0;
+  const completionRate = totalTasks > 0 
+    ? Math.round((completedTasks / totalTasks) * 100) 
+    : 0;
+
+  return (
+    <div className="min-h-screen bg-gray-100 text-gray-800">
+      <Navbar title="Project Portfolio Dashboard" />
+
+      {/* Top banner */}
+      <header className="bg-gradient-to-r from-blue-700 to-blue-900 text-white py-8 text-center relative">
+        <button
+          onClick={fetchData}
+          disabled={loading}
+          className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-white/20 hover:bg-white/30 text-white p-2 rounded-lg transition-colors disabled:opacity-50"
+          title="Refresh data"
+        >
+          <FaArrowsRotate className={loading ? "animate-spin" : ""} />
+        </button>
+        <h1 className="text-2xl sm:text-3xl font-semibold tracking-wide px-4">
+          Project Portfolio Management
+        </h1>
+        <p className="mt-2 text-blue-100 text-sm sm:text-base px-4">Real-time project and task analytics</p>
+      </header>
+
+      {/* Guidelines + Quick Actions Section */}
+      <section className="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <GuidelinesCard />
+        <div className="bg-white p-4 rounded-lg shadow-md">
+          <h3 className="font-semibold mb-3 border-b pb-2">Quick Actions</h3>
+          <div className="space-y-2 mb-4">
+            <button
+              onClick={() => {
+                setEditingProject(null);
+                setShowProjectModal(true);
+              }}
+              className="w-full text-left px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+            >
+              ➕ New Project
+            </button>
+            <button
+              onClick={() => {
+                setEditingTask(null);
+                setShowTaskModal(true);
+              }}
+              className="w-full text-left px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+            >
+              ➕ New Task
+            </button>
+            <button
+              onClick={() => {
+                setEditingUser(null);
+                setShowUserModal(true);
+              }}
+              className="w-full text-left px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
+            >
+              ➕ New User
+            </button>
+          </div>
+          <div className="border-t pt-3">
+            <h4 className="font-semibold mb-2 text-sm text-gray-600">Manage</h4>
+            <div className="grid grid-cols-3 gap-2">
+              <Link
+                to="/projects"
+                className="text-center px-2 sm:px-3 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors text-xs sm:text-sm"
+              >
+                📁 Projects
+              </Link>
+              <Link
+                to="/tasks"
+                className="text-center px-2 sm:px-3 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors text-xs sm:text-sm"
+              >
+                ✅ Tasks
+              </Link>
+              <Link
+                to="/users"
+                className="text-center px-2 sm:px-3 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors text-xs sm:text-sm"
+              >
+                👥 Users
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Summary Cards */}
+      <section className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <ChartCard title="Total Tasks" value={dashboard.totalTasks || 0} />
+        <ChartCard title="Total Projects" value={dashboard.totalProjects || 0} />
+        <div className="bg-white rounded-lg shadow-md p-4 text-center">
+          <h3 className="font-semibold mb-2 border-b pb-1">Completion Rate</h3>
+          <p className="text-3xl font-bold text-green-600">{completionRate}%</p>
+          <p className="text-sm text-gray-500 mt-1">
+            {completedTasks} of {totalTasks} tasks
+          </p>
+        </div>
+        <div className="bg-white rounded-lg shadow-md p-4 text-center">
+          <h3 className="font-semibold mb-2 border-b pb-1">Overdue Tasks</h3>
+          <p className="text-3xl font-bold text-red-600">
+            {dashboard.overdueTasks?.length || 0}
+          </p>
+        </div>
+      </section>
+
+      {/* Charts Section */}
+      <section className="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+        {/* Task Status Distribution */}
+        {statusChartData.length > 0 ? (
+          <div className="bg-white rounded-lg shadow-md p-4">
+            <h3 className="font-semibold mb-4 border-b pb-2">
+              Task Status Distribution
+            </h3>
+            <ResponsiveContainer width="100%" height={250}>
+              <PieChart>
+                <Pie
+                  data={statusChartData}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={80}
+                  label={(entry) => `${entry.name}: ${entry.value}`}
+                >
+                  {statusChartData.map((entry, index) => (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={COLORS[entry.name] || "#94a3b8"}
+                    />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div className="bg-white rounded-lg shadow-md p-4">
+            <h3 className="font-semibold mb-4 border-b pb-2">
+              Task Status Distribution
+            </h3>
+            <div className="flex items-center justify-center h-[250px] text-gray-500">
+              No task data available
+            </div>
+          </div>
+        )}
+
+        {/* Task Status Bar Chart */}
+        {statusChartData.length > 0 ? (
+          <div className="bg-white rounded-lg shadow-md p-4">
+            <h3 className="font-semibold mb-4 border-b pb-2">
+              Tasks by Status
+            </h3>
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={statusChartData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" />
+                <YAxis />
+                <Tooltip />
+                <Bar dataKey="value" fill="#3b82f6" radius={[8, 8, 0, 0]}>
+                  {statusChartData.map((entry, index) => (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={COLORS[entry.name] || "#94a3b8"}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div className="bg-white rounded-lg shadow-md p-4">
+            <h3 className="font-semibold mb-4 border-b pb-2">
+              Tasks by Status
+            </h3>
+            <div className="flex items-center justify-center h-[250px] text-gray-500">
+              No task data available
+            </div>
+          </div>
+        )}
+
+        {/* Project Progress */}
+        {projectChartData.length > 0 && (
+          <div className="bg-white rounded-lg shadow-md p-4">
+            <h3 className="font-semibold mb-4 border-b pb-2">
+              Project Progress (Top 10)
+            </h3>
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={projectChartData} layout="vertical">
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis type="number" domain={[0, 100]} />
+                <YAxis dataKey="name" type="category" width={100} />
+                <Tooltip
+                  formatter={(value) => `${value}%`}
+                  labelFormatter={(label) => `Project: ${label}`}
+                />
+                <Bar dataKey="progress" fill="#10b981" radius={[0, 8, 8, 0]}>
+                  {projectChartData.map((entry, index) => (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={
+                        entry.progress === 100
+                          ? "#10b981"
+                          : entry.progress >= 50
+                          ? "#3b82f6"
+                          : "#f97316"
+                      }
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {/* Employee Workload */}
+        {employeeWorkloadData.length > 0 && (
+          <div className="bg-white rounded-lg shadow-md p-4">
+            <h3 className="font-semibold mb-4 border-b pb-2">
+              Employee Workload (Top 10)
+            </h3>
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={employeeWorkloadData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  dataKey="name" 
+                  angle={-45} 
+                  textAnchor="end" 
+                  height={100}
+                  tick={{ fontSize: 10 }}
+                />
+                <YAxis />
+                <Tooltip
+                  formatter={(value) => `${value} tasks`}
+                  labelFormatter={(label) => `Employee: ${label}`}
+                />
+                <Bar dataKey="tasks" fill="#8b5cf6" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {/* Project Completion Details */}
+        {dashboard.projectCompletion && dashboard.projectCompletion.length > 0 && (
+          <div className="bg-white rounded-lg shadow-md p-4 md:col-span-2 lg:col-span-3">
+            <h3 className="font-semibold mb-4 border-b pb-2">
+              All Projects Completion Status
+            </h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs sm:text-sm">
+                <thead>
+                  <tr className="bg-gray-50 border-b">
+                    <th className="p-2 sm:p-3 text-left">Project</th>
+                    <th className="p-2 sm:p-3 text-left">Total Tasks</th>
+                    <th className="p-2 sm:p-3 text-left">Completed</th>
+                    <th className="p-2 sm:p-3 text-left">Progress</th>
+                    <th className="p-2 sm:p-3 text-left">Status Bar</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dashboard.projectCompletion.map((project, index) => (
+                    <tr key={`project-${project.project}-${index}`} className="border-b hover:bg-gray-50">
+                      <td className="p-2 sm:p-3 font-medium">{project.project}</td>
+                      <td className="p-2 sm:p-3">{project.totalTasks}</td>
+                      <td className="p-2 sm:p-3 text-green-600 font-semibold">
+                        {project.completedTasks}
+                      </td>
+                      <td className="p-2 sm:p-3">
+                        <span
+                          className={`font-semibold ${
+                            project.progress === 100
+                              ? "text-green-600"
+                              : project.progress >= 50
+                              ? "text-blue-600"
+                              : "text-orange-600"
+                          }`}
+                        >
+                          {project.progress}%
+                        </span>
+                      </td>
+                      <td className="p-2 sm:p-3">
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div
+                            className={`h-2 rounded-full ${
+                              project.progress === 100
+                                ? "bg-green-600"
+                                : project.progress >= 50
+                                ? "bg-blue-600"
+                                : "bg-orange-600"
+                            }`}
+                            style={{ width: `${project.progress}%` }}
+                          ></div>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* Overdue Tasks Section */}
+      {dashboard.overdueTasks && dashboard.overdueTasks.length > 0 && (
+        <section className="p-4 sm:p-6">
+          <div className="bg-white rounded-lg shadow-md p-4">
+            <h3 className="font-semibold mb-4 border-b pb-2 text-red-600">
+              ⚠️ Overdue Tasks ({dashboard.overdueTasks.length})
+            </h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs sm:text-sm">
+                <thead>
+                  <tr className="bg-gray-50 border-b">
+                    <th className="p-2 sm:p-3 text-left">Task</th>
+                    <th className="p-2 sm:p-3 text-left">Project</th>
+                    <th className="p-2 sm:p-3 text-left">Assigned To</th>
+                    <th className="p-2 sm:p-3 text-left">Due Date</th>
+                    <th className="p-2 sm:p-3 text-left">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dashboard.overdueTasks.map((task, index) => (
+                    <tr key={`overdue-${task.title}-${index}`} className="border-b hover:bg-red-50">
+                      <td className="p-2 sm:p-3 font-medium">{task.title}</td>
+                      <td className="p-2 sm:p-3">{task.project}</td>
+                      <td className="p-2 sm:p-3">{task.assignedTo}</td>
+                      <td className="p-2 sm:p-3 text-red-600 font-semibold">
+                        {task.dueDate}
+                      </td>
+                      <td className="p-2 sm:p-3">
+                        <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded text-xs">
+                          {task.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Empty State */}
+      {totalTasks === 0 && (
+        <section className="p-4 sm:p-6">
+          <div className="bg-white rounded-lg shadow-md p-8 text-center">
+            <p className="text-gray-500 text-lg">
+              No tasks found. Start by creating a project and adding tasks!
+            </p>
+          </div>
+        </section>
+      )}
+
+      {/* Project Modal */}
+      {showProjectModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
+              <h2 className="text-xl font-semibold">
+                {editingProject ? "Edit Project" : "New Project"}
+              </h2>
+              <button
+                onClick={() => {
+                  setShowProjectModal(false);
+                  setEditingProject(null);
+                }}
+                className="text-gray-500 hover:text-gray-700 text-2xl"
+              >
+                ×
+              </button>
+            </div>
+            <div className="p-6">
+              <ProjectForm
+                initial={editingProject || {}}
+                onSave={handleProjectSave}
+                onCancel={() => {
+                  setShowProjectModal(false);
+                  setEditingProject(null);
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Task Modal */}
+      {showTaskModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
+              <h2 className="text-xl font-semibold">
+                {editingTask ? "Edit Task" : "New Task"}
+              </h2>
+              <button
+                onClick={() => {
+                  setShowTaskModal(false);
+                  setEditingTask(null);
+                }}
+                className="text-gray-500 hover:text-gray-700 text-2xl"
+              >
+                ×
+              </button>
+            </div>
+            <div className="p-6">
+              <TaskForm
+                initial={editingTask || {}}
+                onSave={handleTaskSave}
+                onCancel={() => {
+                  setShowTaskModal(false);
+                  setEditingTask(null);
+                }}
+                users={users}
+                projects={projects}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* User Modal */}
+      {showUserModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
+              <h2 className="text-xl font-semibold">
+                {editingUser ? "Edit User" : "New User"}
+              </h2>
+              <button
+                onClick={() => {
+                  setShowUserModal(false);
+                  setEditingUser(null);
+                }}
+                className="text-gray-500 hover:text-gray-700 text-2xl"
+              >
+                ×
+              </button>
+            </div>
+            <div className="p-6">
+              <UserForm
+                initial={editingUser || {}}
+                onSave={handleUserSave}
+                onCancel={() => {
+                  setShowUserModal(false);
+                  setEditingUser(null);
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

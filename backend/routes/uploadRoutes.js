@@ -1,0 +1,196 @@
+import express from "express";
+import multer from "multer";
+import { v2 as cloudinary } from "cloudinary";
+import { CloudinaryStorage } from "multer-storage-cloudinary";
+import path from "path";
+import { fileURLToPath } from "url";
+import fs from "fs";
+import dotenv from "dotenv";
+dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Validate Cloudinary configuration
+const cloudinaryConfig = {
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+};
+
+const useCloudinary = cloudinaryConfig.cloud_name && cloudinaryConfig.api_key && cloudinaryConfig.api_secret;
+
+if (!useCloudinary) {
+  console.warn("⚠️ WARNING: Cloudinary credentials are missing!");
+  console.warn("Using local file storage as fallback. Files will be stored in backend/uploads/");
+  console.warn("For production, please set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET in your .env file");
+  
+  // Create uploads directory if it doesn't exist
+  const uploadsDir = path.join(__dirname, "../uploads");
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+    console.log("✅ Created uploads directory");
+  }
+} else {
+  // Configure Cloudinary
+  cloudinary.config(cloudinaryConfig);
+  console.log("✅ Cloudinary configured");
+}
+
+// File filter - only allow PDF and document formats
+const fileFilter = (req, file, cb) => {
+  const allowedMimes = [
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  ];
+  const allowedExtensions = ['.pdf', '.doc', '.docx'];
+  const fileExtension = path.extname(file.originalname).toLowerCase();
+  
+  if (allowedMimes.includes(file.mimetype) || allowedExtensions.includes(fileExtension)) {
+    cb(null, true);
+  } else {
+    cb(new Error(`Invalid file type. Only PDF, DOC, and DOCX files are allowed. Received: ${file.mimetype || fileExtension}`), false);
+  }
+};
+
+// Configure multer storage - use Cloudinary if available, otherwise use disk storage
+let storage;
+if (useCloudinary) {
+  try {
+    storage = new CloudinaryStorage({
+      cloudinary: cloudinary,
+      params: {
+        folder: "project_dashboard",
+        allowed_formats: ["pdf", "doc", "docx"], // Only PDF and documents
+      },
+    });
+    console.log("✅ Cloudinary storage configured successfully (PDF & Documents only)");
+  } catch (error) {
+    console.error("❌ Error configuring Cloudinary storage:", error);
+    throw error;
+  }
+} else {
+  // Fallback to disk storage
+  storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+      const uploadsDir = path.join(__dirname, "../uploads");
+      cb(null, uploadsDir);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      cb(null, file.fieldname + "-" + uniqueSuffix + path.extname(file.originalname));
+    },
+  });
+  console.log("✅ Local disk storage configured as fallback (PDF & Documents only)");
+}
+
+const upload = multer({ 
+  storage: storage,
+  fileFilter: fileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+});
+
+const router = express.Router();
+
+// Test endpoint
+router.get("/test", (req, res) => {
+  res.json({ 
+    message: "Upload route is working",
+    cloudinary_configured: !!process.env.CLOUDINARY_CLOUD_NAME 
+  });
+});
+
+// Upload endpoint with proper error handling
+router.post("/", (req, res, next) => {
+  upload.array("files", 5)(req, res, (err) => {
+    if (err) {
+      // Handle multer errors
+      if (err instanceof multer.MulterError) {
+        console.error("❌ Multer error:", err);
+        console.error("Error code:", err.code);
+        console.error("Error message:", err.message);
+        if (err.code === "LIMIT_FILE_SIZE") {
+          return res.status(400).json({ error: "File too large. Maximum size is 10MB." });
+        }
+        if (err.code === "LIMIT_FILE_COUNT") {
+          return res.status(400).json({ error: "Too many files. Maximum is 5 files." });
+        }
+        return res.status(400).json({ error: "File upload error", message: err.message, code: err.code });
+      }
+      // Handle Cloudinary errors
+      if (err.message && err.message.includes("cloudinary")) {
+        console.error("❌ Cloudinary error:", err);
+        return res.status(500).json({ 
+          error: "Cloudinary upload failed", 
+          message: err.message,
+          details: "Please check your Cloudinary credentials and configuration"
+        });
+      }
+      // Handle other errors
+      console.error("❌ Upload middleware error:", err);
+      console.error("Error type:", err.constructor.name);
+      console.error("Error stack:", err.stack);
+      return res.status(500).json({ 
+        error: "Upload failed", 
+        message: err.message || "Unknown error occurred",
+        errorType: err.constructor.name
+      });
+    }
+    
+    // If no error, proceed with file processing
+    try {
+      console.log("=== UPLOAD REQUEST RECEIVED ===");
+      console.log("Request body:", req.body);
+      console.log("Request files:", req.files ? req.files.length : 0);
+      console.log("Files details:", req.files);
+      
+      if (!req.files || req.files.length === 0) {
+        console.log("ERROR: No files received");
+        return res.status(400).json({ error: "No files uploaded" });
+      }
+      
+      // Extract URLs from uploaded files
+      const urls = req.files.map((file) => {
+        let url;
+        if (useCloudinary) {
+          // Cloudinary returns file with path/url/secure_url
+          url = file.path || file.url || file.secure_url;
+        } else {
+          // Local storage - return a full URL that can be accessed
+          const filename = file.filename;
+          const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 5000}`;
+          url = `${baseUrl}/uploads/${filename}`;
+        }
+        console.log(`File: ${file.originalname} -> URL: ${url}`);
+        return url;
+      });
+      
+      console.log("=== UPLOAD SUCCESS ===");
+      console.log("URLs returned:", urls);
+      
+      res.json({ 
+        success: true,
+        urls: urls,
+        count: urls.length 
+      });
+    } catch (error) {
+      console.error("=== UPLOAD PROCESSING ERROR ===");
+      console.error("Error type:", error.constructor.name);
+      console.error("Error message:", error.message);
+      console.error("Error stack:", error.stack);
+      console.error("Full error object:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
+      
+      res.status(500).json({ 
+        error: "Failed to process uploaded files", 
+        message: error.message || "Unknown error",
+        errorType: error.constructor.name,
+        details: process.env.NODE_ENV === "development" ? error.stack : undefined
+      });
+    }
+  });
+});
+
+export default router;
