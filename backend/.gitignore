@@ -14,6 +14,7 @@ config/google-service-account.json
 **/google-service-account.json
 **/*service-account*.json
 **/*credentials*.json
+**/xenon-depth-*.json
 
 # Uploaded files (may contain sensitive user data)
 uploads/
