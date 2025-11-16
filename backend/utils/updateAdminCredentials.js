@@ -95,7 +95,6 @@ async function updateAdminCredentials() {
       };
       
       const row = userToRow(newAdmin);
-      const { appendRow } = await import("../services/googleSheetService.js");
       await appendRow(SHEET_NAME, row, AUTH_USERS_HEADERS);
       
       console.log("✅ New admin account created successfully!");
@@ -141,7 +140,6 @@ async function updateAdminCredentials() {
       };
       
       const row = userToRow(newAdmin);
-      const { appendRow } = await import("../services/googleSheetService.js");
       await appendRow(SHEET_NAME, row, AUTH_USERS_HEADERS);
       
       console.log("✅ New admin account created successfully!");
