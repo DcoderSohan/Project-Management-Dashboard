@@ -15,8 +15,17 @@ export const authService = {
 
   // Login
   async login(email, password) {
-    const res = await api.post("/auth/login", { email, password });
-    return res.data;
+    try {
+      console.log("📡 Sending login request to /auth/login");
+      const res = await api.post("/auth/login", { email, password });
+      console.log("📡 Login response status:", res.status);
+      console.log("📡 Login response data:", res.data);
+      return res.data;
+    } catch (error) {
+      console.error("❌ Login request failed:", error);
+      // Re-throw to let AuthContext handle it
+      throw error;
+    }
   },
 
   // Get current user

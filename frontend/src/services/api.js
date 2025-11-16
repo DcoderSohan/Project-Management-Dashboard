@@ -2,10 +2,9 @@ import axios from "axios";
 
 const baseURL = import.meta.env.VITE_API_URL || "/api";
 
-// Log the API URL in development to help debug
-if (import.meta.env.DEV) {
-  console.log("🔗 API Base URL:", baseURL);
-}
+// Log the API URL to help debug (both dev and production)
+console.log("🔗 API Base URL:", baseURL);
+console.log("🔗 Environment variable VITE_API_URL:", import.meta.env.VITE_API_URL || "NOT SET (using /api)");
 
 const api = axios.create({
   baseURL: baseURL,
