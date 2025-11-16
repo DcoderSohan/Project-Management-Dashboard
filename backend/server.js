@@ -31,7 +31,13 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 //4. Middleware setup
-app.use(cors()); // allow frontend calls
+// CORS configuration - allow all origins for now (can be restricted in production)
+app.use(cors({
+  origin: true, // Allow all origins
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json()); //parse incoming JSON requests
 
 // Serve uploaded files statically

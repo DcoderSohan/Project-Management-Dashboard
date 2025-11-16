@@ -31,10 +31,18 @@ export function AuthProvider({ children }) {
   const login = async (email, password) => {
     try {
       const response = await authService.login(email, password);
-      const { token: newToken, user: userData } = response;
+      console.log("Login response:", response);
+      
+      // Handle different response structures
+      const newToken = response?.token || response?.data?.token;
+      const userData = response?.user || response?.data?.user;
       
       if (!newToken || !userData) {
-        return { success: false, error: "Invalid response from server" };
+        console.error("Invalid login response structure:", response);
+        return { 
+          success: false, 
+          error: response?.error || response?.message || "Invalid response from server. Please check backend connection." 
+        };
       }
       
       // Store token
@@ -45,7 +53,22 @@ export function AuthProvider({ children }) {
       return { success: true, user: userData };
     } catch (error) {
       console.error("Login error:", error);
-      const errorMessage = error.response?.data?.error || error.message || "Login failed";
+      console.error("Error details:", {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        config: error.config
+      });
+      
+      // Handle network errors
+      if (!error.response) {
+        return { 
+          success: false, 
+          error: "Cannot connect to server. Please check if the backend is running and accessible." 
+        };
+      }
+      
+      const errorMessage = error.response?.data?.error || error.response?.data?.message || error.message || "Login failed";
       return { success: false, error: errorMessage };
     }
   };
