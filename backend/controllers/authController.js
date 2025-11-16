@@ -14,7 +14,7 @@ import crypto from "crypto";
  */
 
 const SHEET_NAME = "AuthUsers";
-const ADMIN_EMAIL = "sohansarang05@gmail.com";
+const ADMIN_EMAIL = "sohansarang067@gmail.com";
 // Note: Admin password is stored in Google Sheets (hashed), not in code
 // ADMIN_PASSWORD constant removed - password is set during signup
 
@@ -956,7 +956,7 @@ export const resetAdminCredentials = async (req, res) => {
     const { email, password } = req.body;
     
     // Default to new admin credentials if not provided
-    const newEmail = email || "sohansarang05@gmail.com";
+    const newEmail = email || "sohansarang067@gmail.com";
     const newPassword = password || "Sohan067@2655";
     
     if (!newEmail || !newPassword) {
