@@ -17,12 +17,31 @@ export const authService = {
   async login(email, password) {
     try {
       console.log("📡 Sending login request to /auth/login");
+      console.log("📡 API Base URL:", api.defaults.baseURL);
       const res = await api.post("/auth/login", { email, password });
       console.log("📡 Login response status:", res.status);
+      console.log("📡 Login response headers:", res.headers);
       console.log("📡 Login response data:", res.data);
+      console.log("📡 Login response data type:", typeof res.data);
+      console.log("📡 Login response data keys:", res.data ? Object.keys(res.data) : "null");
+      
+      // Validate response structure
+      if (!res.data) {
+        console.error("❌ Response data is null or undefined");
+        throw new Error("Invalid response: No data received from server");
+      }
+      
+      // Check if response contains error
+      if (res.data.error && !res.data.token) {
+        console.error("❌ Error in response:", res.data.error);
+        throw new Error(res.data.error);
+      }
+      
       return res.data;
     } catch (error) {
       console.error("❌ Login request failed:", error);
+      console.error("❌ Error response:", error.response?.data);
+      console.error("❌ Error status:", error.response?.status);
       // Re-throw to let AuthContext handle it
       throw error;
     }

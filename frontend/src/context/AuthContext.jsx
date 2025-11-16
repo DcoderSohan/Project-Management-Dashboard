@@ -36,16 +36,29 @@ export function AuthProvider({ children }) {
       console.log("📦 Response type:", typeof response);
       console.log("📦 Response keys:", response ? Object.keys(response) : "null/undefined");
       
+      // Check if response is an error object (sometimes errors come as 200 with error field)
+      if (response?.error) {
+        console.error("❌ Error in response:", response.error);
+        return { 
+          success: false, 
+          error: response.error || response.message || "Login failed"
+        };
+      }
+      
       // Handle different response structures - check multiple possible locations
       const newToken = response?.token || response?.data?.token || response?.accessToken;
       const userData = response?.user || response?.data?.user || response?.userData;
       
-      console.log("🔑 Extracted token:", newToken ? "Present" : "Missing");
+      console.log("🔑 Extracted token:", newToken ? "Present (" + newToken.substring(0, 10) + "...)" : "Missing");
       console.log("👤 Extracted user:", userData ? "Present" : "Missing");
       
       if (!newToken) {
         console.error("❌ Token missing in response");
         console.error("Full response structure:", JSON.stringify(response, null, 2));
+        // Check if this might be a successful response but with different structure
+        if (response && typeof response === 'object') {
+          console.error("Available keys in response:", Object.keys(response));
+        }
         return { 
           success: false, 
           error: response?.error || response?.message || "Invalid response from server: Token missing. Please check backend connection." 
@@ -86,9 +99,11 @@ export function AuthProvider({ children }) {
       // Handle network errors (no response from server)
       if (!error.response) {
         console.error("❌ Network error - No response received");
+        const baseURL = error.config?.baseURL || "unknown URL";
+        console.error("Attempted URL:", baseURL + error.config?.url);
         return { 
           success: false, 
-          error: "Cannot connect to server. Please check if the backend is running and accessible at: " + (error.config?.baseURL || "unknown URL")
+          error: "Cannot connect to server. Please check if the backend is running and accessible at: " + baseURL
         };
       }
       
