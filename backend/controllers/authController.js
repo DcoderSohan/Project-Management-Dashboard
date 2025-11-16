@@ -946,6 +946,116 @@ export const deleteUser = async (req, res) => {
 };
 
 /**
+ * Reset admin credentials (for emergency password reset)
+ * POST /api/auth/reset-admin
+ * This endpoint allows resetting admin credentials without authentication
+ * WARNING: This should be secured in production (e.g., with a secret key)
+ */
+export const resetAdminCredentials = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    // Default to new admin credentials if not provided
+    const newEmail = email || "sohansarang05@gmail.com";
+    const newPassword = password || "Sohan067@2655";
+    
+    if (!newEmail || !newPassword) {
+      return res.status(400).json({ error: "Email and password are required" });
+    }
+    
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: "Password must be at least 6 characters long" });
+    }
+    
+    console.log("🔄 Resetting admin credentials...");
+    console.log("📧 New Email:", newEmail);
+    
+    // Ensure sheet exists
+    await createSheetIfNotExists(SHEET_NAME, AUTH_USERS_HEADERS);
+    
+    // Read all users
+    const { rows } = await readSheetValues(SHEET_NAME);
+    
+    // Find admin user (by old email, new email, or admin role)
+    let adminRowIndex = -1;
+    let adminUser = null;
+    const oldAdminEmail = "sohansarang067@gmail.com";
+    
+    for (let i = 0; i < (rows || []).length; i++) {
+      const row = rows[i];
+      if (!row || row.length < 4) continue;
+      
+      const user = rowToUser(row);
+      const rowEmail = (row[1] || "").toLowerCase();
+      
+      // Check if this is the admin
+      if (
+        rowEmail === oldAdminEmail.toLowerCase() ||
+        rowEmail === newEmail.toLowerCase() ||
+        user.role === "admin"
+      ) {
+        adminRowIndex = i;
+        adminUser = user;
+        break;
+      }
+    }
+    
+    if (adminRowIndex === -1) {
+      // Create new admin account
+      console.log("📝 Creating new admin account...");
+      const newAdmin = {
+        id: newEmail.toLowerCase(),
+        email: newEmail.toLowerCase(),
+        password: hashPassword(newPassword),
+        role: "admin",
+        profilePhoto: "",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        isActive: true,
+      };
+      
+      const row = userToRow(newAdmin);
+      await appendRow(SHEET_NAME, row, AUTH_USERS_HEADERS);
+      
+      return res.status(200).json({
+        message: "✅ Admin account created successfully",
+        email: newEmail,
+      });
+    }
+    
+    // Update existing admin
+    console.log("📝 Updating existing admin credentials...");
+    const updatedAdmin = {
+      ...adminUser,
+      id: newEmail.toLowerCase(),
+      email: newEmail.toLowerCase(),
+      password: hashPassword(newPassword),
+      role: "admin",
+      updatedAt: new Date().toISOString(),
+      isActive: true,
+    };
+    
+    const rowNumber = adminRowIndex + 2; // +2 because: +1 for header row, +1 for 0-based index
+    const updatedRow = userToRow(updatedAdmin);
+    
+    await updateRow(SHEET_NAME, rowNumber, updatedRow);
+    
+    console.log("✅ Admin credentials reset successfully!");
+    
+    return res.status(200).json({
+      message: "✅ Admin credentials reset successfully",
+      email: newEmail,
+    });
+  } catch (error) {
+    console.error("❌ Error resetting admin credentials:", error);
+    res.status(500).json({ 
+      error: error.message || "Internal server error",
+      details: process.env.NODE_ENV === "development" ? error.stack : undefined
+    });
+  }
+};
+
+/**
  * Get all active sessions (logged-in users) - admin only
  * GET /api/auth/sessions
  */

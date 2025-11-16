@@ -11,6 +11,7 @@ import {
   updateUser,
   deleteUser,
   getSessions,
+  resetAdminCredentials,
 } from "../controllers/authController.js";
 
 const router = express.Router();
@@ -19,6 +20,7 @@ const router = express.Router();
 router.get("/check-admin", checkAdminExists); // Check if admin exists
 router.post("/signup", signup); // Sign up admin (first time setup)
 router.post("/login", login); // Login admin
+router.post("/reset-admin", resetAdminCredentials); // Reset admin credentials (emergency)
 router.get("/me", verifyToken, getCurrentUser);
 
 // Profile routes
