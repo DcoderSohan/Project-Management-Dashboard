@@ -99,11 +99,13 @@ export function AuthProvider({ children }) {
       // Handle network errors (no response from server)
       if (!error.response) {
         console.error("❌ Network error - No response received");
-        const baseURL = error.config?.baseURL || "unknown URL";
-        console.error("Attempted URL:", baseURL + error.config?.url);
+        const baseURL = error.config?.baseURL || "https://project-management-dashboard-1-le5n.onrender.com/api";
+        const attemptedURL = baseURL + (error.config?.url || "");
+        console.error("Attempted URL:", attemptedURL);
+        console.error("Base URL from config:", error.config?.baseURL || "NOT SET - using fallback");
         return { 
           success: false, 
-          error: "Cannot connect to server. Please check if the backend is running and accessible at: " + baseURL
+          error: "Cannot connect to server. Please check if the backend is running at: " + baseURL
         };
       }
       

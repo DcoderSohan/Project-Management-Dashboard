@@ -1,10 +1,32 @@
 import axios from "axios";
 
-const baseURL = import.meta.env.VITE_API_URL || "/api";
+// Set backend URL - use environment variable or fallback to production URL
+const getBaseURL = () => {
+  // Priority 1: Environment variable (set in Render dashboard)
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  
+  // Priority 2: Production fallback (for deployed frontend)
+  // Check if we're in production (not localhost)
+  const isProduction = typeof window !== 'undefined' && 
+    window.location.hostname !== 'localhost' && 
+    window.location.hostname !== '127.0.0.1';
+  
+  if (isProduction) {
+    return "https://project-management-dashboard-1-le5n.onrender.com/api";
+  }
+  
+  // Priority 3: Development fallback (for local dev)
+  return "/api";
+};
+
+const baseURL = getBaseURL();
 
 // Log the API URL to help debug (both dev and production)
 console.log("🔗 API Base URL:", baseURL);
-console.log("🔗 Environment variable VITE_API_URL:", import.meta.env.VITE_API_URL || "NOT SET (using /api)");
+console.log("🔗 Environment variable VITE_API_URL:", import.meta.env.VITE_API_URL || "NOT SET");
+console.log("🔗 Using fallback:", !import.meta.env.VITE_API_URL ? "YES" : "NO");
 
 const api = axios.create({
   baseURL: baseURL,
@@ -53,11 +75,14 @@ api.interceptors.response.use(
     // Handle network errors (no response from server)
     if (!error.response) {
       console.error("❌ Network error - No response from server");
-      console.error("Request URL:", error.config?.baseURL + error.config?.url);
+      const attemptedURL = (error.config?.baseURL || "unknown") + (error.config?.url || "");
+      console.error("Request URL:", attemptedURL);
+      console.error("Base URL:", error.config?.baseURL || "NOT SET");
       console.error("This usually means:");
       console.error("  1. Backend server is not running");
       console.error("  2. CORS is blocking the request");
       console.error("  3. Network connectivity issue");
+      console.error("  4. VITE_API_URL environment variable not set in production");
     }
     
     if (error.response?.status === 401) {
