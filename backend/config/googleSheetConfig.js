@@ -15,7 +15,8 @@ const __dirname = path.dirname(__filename);
 const GOOGLE_SHEET_ID = process.env.GOOGLE_SHEET_ID;
 
 // Path to your downloaded service account key
-const SERVICE_ACCOUNT_KEY_FILE = path.join(__dirname, "google-service-account.json");
+// Use absolute path to avoid issues with working directory
+const SERVICE_ACCOUNT_KEY_FILE = path.resolve(__dirname, "google-service-account.json");
 
 export async function getGoogleSheet() {
   try {
@@ -46,6 +47,19 @@ export async function getGoogleSheet() {
     else if (fs.existsSync(SERVICE_ACCOUNT_KEY_FILE)) {
       console.log("📝 Using Google service account from key file");
       console.log("   File path:", SERVICE_ACCOUNT_KEY_FILE);
+      console.log("   Absolute path:", path.resolve(SERVICE_ACCOUNT_KEY_FILE));
+      console.log("   Current working directory:", process.cwd());
+      
+      // Verify the file is readable
+      try {
+        const fileContent = fs.readFileSync(SERVICE_ACCOUNT_KEY_FILE, 'utf8');
+        JSON.parse(fileContent); // Validate it's valid JSON
+        console.log("   ✅ File is readable and valid JSON");
+      } catch (fileError) {
+        console.error("   ❌ File exists but cannot be read or is invalid:", fileError.message);
+        throw new Error(`Service account file exists but is invalid: ${fileError.message}`);
+      }
+      
       auth = new google.auth.GoogleAuth({
         keyFile: SERVICE_ACCOUNT_KEY_FILE,
         scopes: ["https://www.googleapis.com/auth/spreadsheets"],
@@ -57,9 +71,35 @@ export async function getGoogleSheet() {
       console.error("❌ Google service account credentials not found!");
       console.error("   Checked environment variable: GOOGLE_SERVICE_ACCOUNT_JSON");
       console.error("   Checked file path:", SERVICE_ACCOUNT_KEY_FILE);
+      console.error("   Absolute path:", path.resolve(SERVICE_ACCOUNT_KEY_FILE));
+      console.error("   Current working directory:", process.cwd());
       console.error("   File exists:", fs.existsSync(SERVICE_ACCOUNT_KEY_FILE));
       
-      const errorMsg = `Google service account credentials not found!
+      // Try to find the file in alternative locations
+      const alternativePaths = [
+        path.join(process.cwd(), "backend", "config", "google-service-account.json"),
+        path.join(process.cwd(), "config", "google-service-account.json"),
+        path.resolve(__dirname, "..", "config", "google-service-account.json"),
+      ];
+      
+      let foundAlternative = false;
+      for (const altPath of alternativePaths) {
+        if (fs.existsSync(altPath)) {
+          console.error(`   ⚠️  Found file at alternative path: ${altPath}`);
+          foundAlternative = true;
+        }
+      }
+      
+      // Create a concise error message for production, detailed for development
+      const isProduction = process.env.NODE_ENV === "production" || !fs.existsSync(path.join(process.cwd(), ".env"));
+      
+      let errorMsg;
+      if (isProduction) {
+        // Concise message for production (Render)
+        errorMsg = `Google service account credentials not found. Please set GOOGLE_SERVICE_ACCOUNT_JSON environment variable in Render dashboard. See RENDER_SETUP_GOOGLE_CREDENTIALS.md for instructions.`;
+      } else {
+        // Detailed message for development
+        errorMsg = `Google service account credentials not found!
 
 Please provide credentials using one of these methods:
 
@@ -80,9 +120,14 @@ To get your service account key:
      - Place it at: backend/config/google-service-account.json (for local)
      - Or set GOOGLE_SERVICE_ACCOUNT_JSON environment variable with the JSON content (for production)
 
-Current file path being checked: ${SERVICE_ACCOUNT_KEY_FILE}
-File exists: ${fs.existsSync(SERVICE_ACCOUNT_KEY_FILE)}
+Debug Info:
+  Current file path: ${SERVICE_ACCOUNT_KEY_FILE}
+  Absolute path: ${path.resolve(SERVICE_ACCOUNT_KEY_FILE)}
+  Current working directory: ${process.cwd()}
+  File exists: ${fs.existsSync(SERVICE_ACCOUNT_KEY_FILE)}
+  ${foundAlternative ? "⚠️  File found at alternative location - check the paths above" : ""}
 `;
+      }
       throw new Error(errorMsg);
     }
 
