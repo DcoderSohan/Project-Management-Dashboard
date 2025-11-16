@@ -14,7 +14,7 @@ import crypto from "crypto";
  */
 
 const SHEET_NAME = "AuthUsers";
-const ADMIN_EMAIL = "sohansarang067@gmail.com";
+const ADMIN_EMAIL = "sohansarang05@gmail.com";
 // Note: Admin password is stored in Google Sheets (hashed), not in code
 // ADMIN_PASSWORD constant removed - password is set during signup
 
