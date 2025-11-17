@@ -61,8 +61,9 @@ const frontendBuildPath = path.join(__dirname, "..", "frontend", "dist");
 const frontendIndexPath = path.join(frontendBuildPath, "index.html");
 
 // Check if frontend build exists and serve static files
+// Set fallthrough to true so missing files call next() and our catch-all can handle client-side routes
 if (existsSync(frontendBuildPath)) {
-  app.use(express.static(frontendBuildPath));
+  app.use(express.static(frontendBuildPath, { fallthrough: true }));
   console.log("✅ Serving static files from frontend/dist");
 }
 
@@ -151,21 +152,30 @@ app.get("/api/test/reminders", async (req, res) => {
 
 // ✅ Catch-all handler: serve React app for all non-API routes
 // This fixes the 404 error when reloading pages with client-side routing
-// Must be placed AFTER all API routes
-// Using app.use() instead of app.get("*") for compatibility with newer Express versions
+// Must be placed AFTER all API routes and static file serving
+// Using a function-based route handler to avoid path-to-regexp issues
 app.use((req, res, next) => {
-  // Only handle GET requests for the catch-all
+  // Only handle GET requests
   if (req.method !== "GET") {
     return next();
   }
   
-  // Skip API routes and uploads (shouldn't reach here, but safety check)
+  // Skip API routes and uploads
   if (req.path.startsWith("/api") || req.path.startsWith("/uploads")) {
-    return res.status(404).json({ error: "Route not found" });
+    return next();
   }
   
+  // Skip if it's a request for a static file (has extension like .js, .css, .png, etc.)
+  // Static files should be handled by express.static middleware above
+  const hasExtension = /\.[^/]+$/.test(req.path.split('?')[0]); // Remove query string
+  if (hasExtension) {
+    return next(); // Let express.static handle it or return 404
+  }
+  
+  // For all other GET requests (client-side routes), serve index.html
   try {
     // If frontend build exists, serve index.html (for production)
+    // This allows React Router to handle client-side routing
     if (existsSync(frontendIndexPath)) {
       const resolvedPath = path.resolve(frontendIndexPath);
       return res.sendFile(resolvedPath);
