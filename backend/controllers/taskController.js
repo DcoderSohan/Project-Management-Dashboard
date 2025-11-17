@@ -17,6 +17,8 @@ const TASK_HEADERS = [
   "Title",
   "Description",
   "AssignedTo",
+  "StartDate",
+  "EndDate",
   "DueDate",
   "Status",
   "Attachments",
@@ -32,6 +34,8 @@ function taskToRow(t) {
     t.title || "",
     t.description || "",
     t.assignedTo || "",
+    t.startDate || "",
+    t.endDate || "",
     t.dueDate || "",
     t.status || "Not Started",
     (t.attachments || []).join(", "),
@@ -48,9 +52,11 @@ function rowToTask(row) {
     title: row[2] || "",
     description: row[3] || "",
     assignedTo: row[4] || "",
-    dueDate: row[5] || "",
-    status: row[6] || "Not Started",
-    attachments: row[7] ? row[7].split(",").map((s) => s.trim()) : [],
+    startDate: row[5] || "",
+    endDate: row[6] || "",
+    dueDate: row[7] || "",
+    status: row[8] || "Not Started",
+    attachments: row[9] ? row[9].split(",").map((s) => s.trim()) : [],
   };
 }
 
@@ -69,7 +75,7 @@ async function recalcProjectProgress(projectId) {
   // compute
   const total = projectTasks.length;
   const completed = projectTasks.filter(
-    (r) => (r[6] || "").toLowerCase() === "completed"
+    (r) => (r[8] || "").toLowerCase() === "completed"
   ).length;
   const progress = total === 0 ? 0 : Math.round((completed / total) * 100);
 
@@ -244,6 +250,8 @@ export const updateTask = async (req, res) => {
       title: update.title ?? existing.title,
       description: update.description ?? existing.description,
       assignedTo: update.assignedTo ?? existing.assignedTo,
+      startDate: update.startDate ?? existing.startDate,
+      endDate: update.endDate ?? existing.endDate,
       dueDate: update.dueDate ?? existing.dueDate,
       status: update.status ?? existing.status,
       attachments: update.attachments ?? existing.attachments,

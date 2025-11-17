@@ -13,6 +13,7 @@ export default function Navbar({ title }) {
     { path: "/", label: "Dashboard" },
     { path: "/projects", label: "Projects" },
     { path: "/tasks", label: "Tasks" },
+    { path: "/timeline", label: "Timeline" },
     { path: "/users", label: "Users" },
   ];
 

@@ -5,6 +5,7 @@ import AdminRoute from "./components/AdminRoute";
 import Dashboard from "./pages/Dashboard";
 import Projects from "./pages/Projects";
 import Tasks from "./pages/Tasks";
+import Timeline from "./pages/Timeline";
 import Users from "./pages/Users";
 import LoggedInUsers from "./pages/LoggedInUsers";
 import Login from "./pages/Auth/Login";
@@ -50,6 +51,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Tasks />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/timeline"
+          element={
+            <ProtectedRoute>
+              <Timeline />
             </ProtectedRoute>
           }
         />

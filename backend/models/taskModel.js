@@ -6,6 +6,8 @@ export const taskFields = {
     title: "",
     description: "",
     assignedTo: "",        // User ID or name
+    startDate: "",         // Task start date
+    endDate: "",           // Task end date
     dueDate: "",
     status: "Not Started", // Not Started / In Progress / Completed
     attachments: [],       // File URLs if needed

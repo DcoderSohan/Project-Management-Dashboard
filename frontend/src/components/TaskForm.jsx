@@ -12,6 +12,8 @@ export default function TaskForm({
     title: initial.title || "",
     description: initial.description || "",
     assignedTo: initial.assignedTo || "",
+    startDate: initial.startDate || "",
+    endDate: initial.endDate || "",
     dueDate: initial.dueDate || "",
     status: initial.status || "Not Started",
     projectId: initial.projectId || "",
@@ -25,6 +27,8 @@ export default function TaskForm({
       title: initial.title || "",
       description: initial.description || "",
       assignedTo: initial.assignedTo || "",
+      startDate: initial.startDate || "",
+      endDate: initial.endDate || "",
       dueDate: initial.dueDate || "",
       status: initial.status || "Not Started",
       projectId: initial.projectId || "",
@@ -184,16 +188,38 @@ export default function TaskForm({
         </select>
       </label>
 
-      <label className="block mb-2">
-        <span>Due Date</span>
-        <input
-          type="date"
-          name="dueDate"
-          value={form.dueDate}
-          onChange={change}
-          className="mt-1 block w-full p-2 border rounded"
-        />
-      </label>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-2">
+        <label className="block">
+          <span>Start Date</span>
+          <input
+            type="date"
+            name="startDate"
+            value={form.startDate}
+            onChange={change}
+            className="mt-1 block w-full p-2 border rounded"
+          />
+        </label>
+        <label className="block">
+          <span>End Date</span>
+          <input
+            type="date"
+            name="endDate"
+            value={form.endDate}
+            onChange={change}
+            className="mt-1 block w-full p-2 border rounded"
+          />
+        </label>
+        <label className="block">
+          <span>Due Date</span>
+          <input
+            type="date"
+            name="dueDate"
+            value={form.dueDate}
+            onChange={change}
+            className="mt-1 block w-full p-2 border rounded"
+          />
+        </label>
+      </div>
 
       <label className="block mb-2">
         <span>Attachments (optional) - PDF and Documents only</span>

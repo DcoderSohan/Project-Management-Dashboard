@@ -247,6 +247,18 @@ export default function Tasks() {
                     <span className="font-medium">Assigned To:</span>
                     <span>{task.assignedTo || "Unassigned"}</span>
                   </div>
+                  {task.startDate && (
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <span className="font-medium">Start Date:</span>
+                      <span>{task.startDate}</span>
+                    </div>
+                  )}
+                  {task.endDate && (
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <span className="font-medium">End Date:</span>
+                      <span>{task.endDate}</span>
+                    </div>
+                  )}
                   {task.dueDate && (
                     <div className="flex items-center gap-2 text-sm text-gray-600">
                       <span className="font-medium">Due Date:</span>
