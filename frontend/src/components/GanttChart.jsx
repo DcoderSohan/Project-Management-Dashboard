@@ -47,34 +47,60 @@ export default function GanttChart({ projects = [], tasks = [], selectedProjectI
 
   // Transform tasks to dhtmlx-gantt format
   const ganttData = useMemo(() => {
-    const tasksWithDates = filteredTasks.filter((task) => task.startDate && task.endDate);
+    // Helper function to check if a string is a valid date
+    const isValidDateString = (dateStr) => {
+      if (!dateStr || typeof dateStr !== 'string') return false;
+      // Check if it matches YYYY-MM-DD format
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(dateStr)) return false;
+      const date = new Date(dateStr);
+      return !isNaN(date.getTime());
+    };
+
+    // Filter tasks that have at least a startDate
+    const tasksWithStartDate = filteredTasks.filter((task) => {
+      return task.startDate && isValidDateString(task.startDate);
+    });
     
-    if (tasksWithDates.length === 0) {
+    if (tasksWithStartDate.length === 0) {
       return { data: [], links: [] };
     }
 
-    const data = tasksWithDates
+    const data = tasksWithStartDate
       .map((task, index) => {
         try {
           const hasOverlap = overlapWarnings[task.id]?.length > 0;
           
-          // Parse dates and validate
-          const startDate = new Date(task.startDate);
-          const endDate = new Date(task.endDate);
+          // Parse start date
+          let startDate = new Date(task.startDate);
           
-          // Validate dates
-          if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-            console.warn(`Invalid dates for task ${task.id}:`, task.startDate, task.endDate);
+          // Validate start date
+          if (isNaN(startDate.getTime())) {
+            console.warn(`Invalid start date for task ${task.id}:`, task.startDate);
             return null;
           }
           
+          // Handle end date - use endDate if valid, otherwise use startDate + 1 day
+          let endDate;
+          if (task.endDate && isValidDateString(task.endDate)) {
+            endDate = new Date(task.endDate);
+            // Validate end date
+            if (isNaN(endDate.getTime())) {
+              // If endDate is invalid, use startDate + 1 day
+              endDate = new Date(startDate);
+              endDate.setDate(endDate.getDate() + 1);
+            }
+          } else {
+            // No valid endDate, use startDate + 1 day
+            endDate = new Date(startDate);
+            endDate.setDate(endDate.getDate() + 1);
+          }
+          
           // Ensure end date is after start date
-          if (endDate < startDate) {
-            console.warn(`End date before start date for task ${task.id}, adjusting...`);
+          if (endDate < startDate || endDate.getTime() === startDate.getTime()) {
             // Set end date to start date + 1 day
-            const adjustedEndDate = new Date(startDate);
-            adjustedEndDate.setDate(adjustedEndDate.getDate() + 1);
-            endDate.setTime(adjustedEndDate.getTime());
+            endDate = new Date(startDate);
+            endDate.setDate(endDate.getDate() + 1);
           }
           
           // Format dates as YYYY-MM-DD strings for dhtmlx-gantt

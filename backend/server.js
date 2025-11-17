@@ -184,10 +184,15 @@ app.get("/api/test/reminders", async (req, res) => {
 app.use((req, res) => {
   console.log(`🔍 Catch-all route hit: ${req.method} ${req.path}`);
   
-  // Only handle GET requests - for other methods, return 404
-  if (req.method !== "GET") {
+  // Handle GET and HEAD requests (HEAD is used by Render for health checks)
+  if (req.method !== "GET" && req.method !== "HEAD") {
     console.log(`❌ Method not allowed: ${req.method}`);
     return res.status(404).json({ error: "Method not allowed" });
+  }
+  
+  // For HEAD requests, just return 200 OK (health check)
+  if (req.method === "HEAD") {
+    return res.status(200).end();
   }
   
   // Skip API routes and uploads - these should have been handled above
