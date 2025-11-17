@@ -63,7 +63,10 @@ const frontendIndexPath = path.join(frontendBuildPath, "index.html");
 // Check if frontend build exists and serve static files
 // Set fallthrough to true so missing files call next() and our catch-all can handle client-side routes
 if (existsSync(frontendBuildPath)) {
-  app.use(express.static(frontendBuildPath, { fallthrough: true }));
+  app.use(express.static(frontendBuildPath, { 
+    fallthrough: true,
+    index: false // Don't serve index.html automatically, let catch-all handle it
+  }));
   console.log("✅ Serving static files from frontend/dist");
 }
 
@@ -153,31 +156,35 @@ app.get("/api/test/reminders", async (req, res) => {
 // ✅ Catch-all handler: serve React app for all non-API routes
 // This fixes the 404 error when reloading pages with client-side routing
 // Must be placed AFTER all API routes and static file serving
-// Using a function-based route handler to avoid path-to-regexp issues
+// This MUST be the last middleware to catch all remaining routes
+// Using app.use() with proper checks to avoid path-to-regexp issues with Express 5.x
 app.use((req, res, next) => {
   // Only handle GET requests
   if (req.method !== "GET") {
     return next();
   }
   
-  // Skip API routes and uploads
+  // Skip API routes and uploads - these should have been handled above
   if (req.path.startsWith("/api") || req.path.startsWith("/uploads")) {
     return next();
   }
   
   // Skip if it's a request for a static file (has extension like .js, .css, .png, etc.)
   // Static files should be handled by express.static middleware above
-  const hasExtension = /\.[^/]+$/.test(req.path.split('?')[0]); // Remove query string
+  const pathWithoutQuery = req.path.split('?')[0]; // Remove query string
+  const hasExtension = /\.[^/]+$/.test(pathWithoutQuery);
   if (hasExtension) {
-    return next(); // Let express.static handle it or return 404
+    // If we reach here, the static file doesn't exist - let it 404
+    return next();
   }
   
-  // For all other GET requests (client-side routes), serve index.html
+  // For all other GET requests (client-side routes like /login, /projects, etc.), serve index.html
   try {
     // If frontend build exists, serve index.html (for production)
     // This allows React Router to handle client-side routing
     if (existsSync(frontendIndexPath)) {
       const resolvedPath = path.resolve(frontendIndexPath);
+      console.log(`📄 Serving index.html for route: ${req.path}`);
       return res.sendFile(resolvedPath);
     }
     
