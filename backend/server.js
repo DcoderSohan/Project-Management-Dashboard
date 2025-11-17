@@ -152,13 +152,19 @@ app.get("/api/test/reminders", async (req, res) => {
 // ✅ Catch-all handler: serve React app for all non-API routes
 // This fixes the 404 error when reloading pages with client-side routing
 // Must be placed AFTER all API routes
-app.get("*", (req, res) => {
+// Using app.use() instead of app.get("*") for compatibility with newer Express versions
+app.use((req, res, next) => {
+  // Only handle GET requests for the catch-all
+  if (req.method !== "GET") {
+    return next();
+  }
+  
+  // Skip API routes and uploads (shouldn't reach here, but safety check)
+  if (req.path.startsWith("/api") || req.path.startsWith("/uploads")) {
+    return res.status(404).json({ error: "Route not found" });
+  }
+  
   try {
-    // Skip API routes and uploads (shouldn't reach here, but safety check)
-    if (req.path.startsWith("/api") || req.path.startsWith("/uploads")) {
-      return res.status(404).json({ error: "Route not found" });
-    }
-    
     // If frontend build exists, serve index.html (for production)
     if (existsSync(frontendIndexPath)) {
       const resolvedPath = path.resolve(frontendIndexPath);
