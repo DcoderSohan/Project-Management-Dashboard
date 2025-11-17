@@ -158,14 +158,18 @@ app.get("/api/test/reminders", async (req, res) => {
 // Must be placed AFTER all API routes and static file serving
 // This MUST be the last middleware - it should NEVER call next() to ensure it catches all routes
 app.use((req, res) => {
+  console.log(`🔍 Catch-all route hit: ${req.method} ${req.path}`);
+  
   // Only handle GET requests - for other methods, return 404
   if (req.method !== "GET") {
+    console.log(`❌ Method not allowed: ${req.method}`);
     return res.status(404).json({ error: "Method not allowed" });
   }
   
   // Skip API routes and uploads - these should have been handled above
   // But if we reach here, they weren't found, so return 404
   if (req.path.startsWith("/api") || req.path.startsWith("/uploads")) {
+    console.log(`❌ API/Upload route not found: ${req.path}`);
     return res.status(404).json({ error: "Route not found" });
   }
   
@@ -175,6 +179,7 @@ app.use((req, res) => {
   const pathWithoutQuery = req.path.split('?')[0]; // Remove query string
   const hasExtension = /\.[^/]+$/.test(pathWithoutQuery);
   if (hasExtension) {
+    console.log(`❌ Static file not found: ${req.path}`);
     return res.status(404).json({ error: "File not found" });
   }
   
@@ -185,19 +190,23 @@ app.use((req, res) => {
     // This allows React Router to handle client-side routing
     if (existsSync(frontendIndexPath)) {
       const resolvedPath = path.resolve(frontendIndexPath);
-      console.log(`📄 Serving index.html for client-side route: ${req.path}`);
+      console.log(`✅ Serving index.html for client-side route: ${req.path}`);
       return res.sendFile(resolvedPath);
     }
     
     // For development: redirect to Vite dev server or show message
     // In development, frontend runs on separate port (usually 5173)
+    console.log(`⚠️ Frontend build not found at: ${frontendIndexPath}`);
     res.status(200).json({
       message: "Backend server is running",
       note: "In development, access the frontend through Vite dev server (usually http://localhost:5173)",
       note2: "In production, build the frontend (npm run build) and it will be served from this server",
+      frontendPath: frontendIndexPath,
+      exists: existsSync(frontendIndexPath),
     });
   } catch (error) {
     console.error("❌ Error in catch-all route:", error.message);
+    console.error("Full error:", error);
     res.status(500).json({
       error: "Internal server error",
       message: error.message,
