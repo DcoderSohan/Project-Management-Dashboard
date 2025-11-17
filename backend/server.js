@@ -61,12 +61,17 @@ const frontendBuildPath = path.join(__dirname, "..", "frontend", "dist");
 const frontendIndexPath = path.join(frontendBuildPath, "index.html");
 
 // Check if frontend build exists and serve static files
-// Custom middleware to handle static files and routes separately
 if (existsSync(frontendBuildPath)) {
   // Serve static assets (JS, CSS, images) from the dist folder
-  // Only serve files that actually exist
+  // Use fallthrough: true so non-existent files continue to catch-all route
+  const staticMiddleware = express.static(frontendBuildPath, { 
+    fallthrough: true, // Continue to next middleware if file doesn't exist
+    index: false // Don't serve index.html automatically
+  });
+  
+  // Wrap static middleware to only handle requests for files with extensions
   app.use((req, res, next) => {
-    // Skip if it's an API route or upload route
+    // Skip API routes and uploads
     if (req.path.startsWith("/api") || req.path.startsWith("/uploads")) {
       return next();
     }
@@ -76,14 +81,10 @@ if (existsSync(frontendBuildPath)) {
     const hasExtension = /\.[^/]+$/.test(pathWithoutQuery);
     
     if (hasExtension) {
-      // It's a static file request - use express.static to serve it
-      // If file doesn't exist, express.static will call next() with fallthrough: true
-      express.static(frontendBuildPath, { 
-        fallthrough: true,
-        index: false
-      })(req, res, next);
+      // It's a static file - let express.static handle it
+      staticMiddleware(req, res, next);
     } else {
-      // Not a static file - pass to next middleware (catch-all will handle it)
+      // Not a static file - pass to catch-all route
       next();
     }
   });
