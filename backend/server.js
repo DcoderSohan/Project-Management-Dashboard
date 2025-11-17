@@ -61,13 +61,17 @@ const frontendBuildPath = path.join(__dirname, "..", "frontend", "dist");
 const frontendIndexPath = path.join(frontendBuildPath, "index.html");
 
 // Check if frontend build exists and serve static files
-// Set fallthrough to true so missing files call next() and our catch-all can handle client-side routes
+// Only serve actual static files (JS, CSS, images, etc.) - NOT routes
 if (existsSync(frontendBuildPath)) {
+  // Serve static assets (JS, CSS, images) from the dist folder
+  // This middleware will only handle files that actually exist
   app.use(express.static(frontendBuildPath, { 
-    fallthrough: true,
-    index: false // Don't serve index.html automatically, let catch-all handle it
+    fallthrough: false, // Don't fall through - if file doesn't exist, return 404
+    index: false // Don't serve index.html automatically
   }));
   console.log("✅ Serving static files from frontend/dist");
+  console.log(`✅ Frontend index.html path: ${frontendIndexPath}`);
+  console.log(`✅ Frontend index.html exists: ${existsSync(frontendIndexPath)}`);
 }
 
 //5. Basic test route
@@ -167,30 +171,23 @@ app.use((req, res) => {
   }
   
   // Skip API routes and uploads - these should have been handled above
-  // But if we reach here, they weren't found, so return 404
   if (req.path.startsWith("/api") || req.path.startsWith("/uploads")) {
     console.log(`❌ API/Upload route not found: ${req.path}`);
     return res.status(404).json({ error: "Route not found" });
   }
   
-  // Skip if it's a request for a static file (has extension like .js, .css, .png, etc.)
-  // Static files should be handled by express.static middleware above
-  // But if we reach here, the file doesn't exist, so return 404
-  const pathWithoutQuery = req.path.split('?')[0]; // Remove query string
-  const hasExtension = /\.[^/]+$/.test(pathWithoutQuery);
-  if (hasExtension) {
-    console.log(`❌ Static file not found: ${req.path}`);
-    return res.status(404).json({ error: "File not found" });
-  }
-  
-  // For ALL other GET requests (client-side routes like /login, /projects, /timeline, etc.), serve index.html
-  // This is the catch-all for React Router to handle
+  // For ALL GET requests that are not API/uploads and not static files, serve index.html
+  // This includes routes like /login, /projects, /timeline, /tasks, etc.
+  // Static files (with extensions) are handled by express.static above
+  // If a static file doesn't exist, express.static will return 404 before reaching here
   try {
     // If frontend build exists, serve index.html (for production)
     // This allows React Router to handle client-side routing
     if (existsSync(frontendIndexPath)) {
       const resolvedPath = path.resolve(frontendIndexPath);
       console.log(`✅ Serving index.html for client-side route: ${req.path}`);
+      // Set proper headers
+      res.setHeader('Content-Type', 'text/html');
       return res.sendFile(resolvedPath);
     }
     
