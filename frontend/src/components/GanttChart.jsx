@@ -53,41 +53,76 @@ export default function GanttChart({ projects = [], tasks = [], selectedProjectI
       return { data: [], links: [] };
     }
 
-    const data = tasksWithDates.map((task, index) => {
-      const hasOverlap = overlapWarnings[task.id]?.length > 0;
-      const startDate = new Date(task.startDate);
-      const endDate = new Date(task.endDate);
-      
-      // Calculate progress based on status
-      let progress = 0;
-      if (task.status === "Completed") {
-        progress = 100;
-      } else if (task.status === "In Progress") {
-        progress = task.progress || 50;
-      } else if (task.status === "Blocked") {
-        progress = task.progress || 25;
-      }
+    const data = tasksWithDates
+      .map((task, index) => {
+        try {
+          const hasOverlap = overlapWarnings[task.id]?.length > 0;
+          
+          // Parse dates and validate
+          const startDate = new Date(task.startDate);
+          const endDate = new Date(task.endDate);
+          
+          // Validate dates
+          if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+            console.warn(`Invalid dates for task ${task.id}:`, task.startDate, task.endDate);
+            return null;
+          }
+          
+          // Ensure end date is after start date
+          if (endDate < startDate) {
+            console.warn(`End date before start date for task ${task.id}, adjusting...`);
+            // Set end date to start date + 1 day
+            const adjustedEndDate = new Date(startDate);
+            adjustedEndDate.setDate(adjustedEndDate.getDate() + 1);
+            endDate.setTime(adjustedEndDate.getTime());
+          }
+          
+          // Format dates as YYYY-MM-DD strings for dhtmlx-gantt
+          const formatDate = (date) => {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+          };
+          
+          const startDateStr = formatDate(startDate);
+          const endDateStr = formatDate(endDate);
+          
+          // Calculate progress based on status
+          let progress = 0;
+          if (task.status === "Completed") {
+            progress = 100;
+          } else if (task.status === "In Progress") {
+            progress = task.progress || 50;
+          } else if (task.status === "Blocked") {
+            progress = task.progress || 25;
+          }
 
-      // Create task text with project name
-      const projectName = getProjectName(task.projectId);
-      const taskText = selectedProjectId 
-        ? task.title 
-        : `${projectName} - ${task.title}`;
+          // Create task text with project name
+          const projectName = getProjectName(task.projectId);
+          const taskText = selectedProjectId 
+            ? task.title 
+            : `${projectName} - ${task.title}`;
 
-      return {
-        id: task.id || `task-${index}`,
-        text: taskText,
-        start_date: startDate,
-        end_date: endDate,
-        progress: progress / 100,
-        color: getStatusColor(task.status, hasOverlap),
-        open: true,
-        type: "task",
-        // Store original task data
-        originalTask: task,
-        hasOverlap: hasOverlap,
-      };
-    });
+          return {
+            id: String(task.id || `task-${index}`),
+            text: taskText,
+            start_date: startDateStr,
+            end_date: endDateStr,
+            progress: progress / 100,
+            color: getStatusColor(task.status, hasOverlap),
+            open: true,
+            type: "task",
+            // Store original task data
+            originalTask: task,
+            hasOverlap: hasOverlap,
+          };
+        } catch (error) {
+          console.error(`Error processing task ${task.id}:`, error);
+          return null;
+        }
+      })
+      .filter(Boolean); // Remove null entries
 
     return { data, links: [] };
   }, [filteredTasks, overlapWarnings, selectedProjectId, projects]);
@@ -96,19 +131,23 @@ export default function GanttChart({ projects = [], tasks = [], selectedProjectI
   useEffect(() => {
     if (!ganttContainer.current) return;
 
-    // Configure Gantt
+    // Configure Gantt date format
     gantt.config.date_format = "%Y-%m-%d";
     
     // Configure columns
     gantt.config.columns = [
       { name: "text", label: "Task Name", width: "*", tree: true },
       { name: "start_date", label: "Start Date", width: 120, align: "center", template: (task) => {
-        return gantt.templates.format_date(task.start_date, "date");
+        if (!task.start_date) return "";
+        const date = gantt.date.parseDate(task.start_date, "date");
+        return gantt.templates.format_date(date, "%m/%d/%Y");
       }},
       { name: "end_date", label: "End Date", width: 120, align: "center", template: (task) => {
-        return gantt.templates.format_date(task.end_date, "date");
+        if (!task.end_date) return "";
+        const date = gantt.date.parseDate(task.end_date, "date");
+        return gantt.templates.format_date(date, "%m/%d/%Y");
       }},
-      { name: "progress", label: "Progress", width: 80, align: "center", template: (task) => `${Math.round(task.progress * 100)}%` },
+      { name: "progress", label: "Progress", width: 80, align: "center", template: (task) => `${Math.round((task.progress || 0) * 100)}%` },
     ];
 
     // Configure scales
@@ -118,14 +157,12 @@ export default function GanttChart({ projects = [], tasks = [], selectedProjectI
       { unit: "week", step: 1, date: "%W" }
     ];
     
-    // Configure date templates
-    gantt.templates.date_format = (date) => {
-      return gantt.templates.format_date(date, "%Y-%m-%d");
-    };
-
     // Configure task height
     gantt.config.row_height = 40;
     gantt.config.bar_height = 25;
+    
+    // Ensure dates are parsed correctly
+    gantt.config.xml_date = "%Y-%m-%d";
 
     // Initialize Gantt
     gantt.init(ganttContainer.current);
