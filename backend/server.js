@@ -60,6 +60,12 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 const frontendBuildPath = path.join(__dirname, "..", "frontend", "dist");
 const frontendIndexPath = path.join(frontendBuildPath, "index.html");
 
+// Log build path for debugging
+console.log(`📁 Checking frontend build at: ${frontendBuildPath}`);
+console.log(`📁 Absolute path: ${path.resolve(frontendBuildPath)}`);
+console.log(`📁 Build exists: ${existsSync(frontendBuildPath)}`);
+console.log(`📁 Index.html exists: ${existsSync(frontendIndexPath)}`);
+
 // Check if frontend build exists and serve static files
 if (existsSync(frontendBuildPath)) {
   // Serve static assets (JS, CSS, images) from the dist folder
