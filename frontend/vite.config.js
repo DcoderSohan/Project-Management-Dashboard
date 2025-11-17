@@ -19,6 +19,14 @@ export default defineConfig({
     strictPort: true,
   },
   build: {
-    chunkSizeWarningLimit: 1000, // Increase chunk size warning limit to 1000kb
+    chunkSizeWarningLimit: 2000, // Increase chunk size warning limit to suppress warnings
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'chart-vendor': ['recharts', 'dhtmlx-gantt'],
+        },
+      },
+    },
   },
 })
