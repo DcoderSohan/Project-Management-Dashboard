@@ -211,15 +211,17 @@ app.use((req, res) => {
       return res.sendFile(resolvedPath);
     }
     
-    // For development: redirect to Vite dev server or show message
-    // In development, frontend runs on separate port (usually 5173)
-    console.log(`⚠️ Frontend build not found at: ${frontendIndexPath}`);
-    res.status(200).json({
-      message: "Backend server is running",
-      note: "In development, access the frontend through Vite dev server (usually http://localhost:5173)",
-      note2: "In production, build the frontend (npm run build) and it will be served from this server",
+    // Frontend build not found - this should not happen in production
+    console.error(`❌ Frontend build not found at: ${frontendIndexPath}`);
+    console.error(`   Build path: ${frontendBuildPath}`);
+    console.error(`   Build path exists: ${existsSync(frontendBuildPath)}`);
+    res.status(503).json({
+      error: "Frontend not built",
+      message: "The frontend build is missing. Please build the frontend before deploying.",
       frontendPath: frontendIndexPath,
+      buildPath: frontendBuildPath,
       exists: existsSync(frontendIndexPath),
+      buildExists: existsSync(frontendBuildPath),
     });
   } catch (error) {
     console.error("❌ Error in catch-all route:", error.message);
