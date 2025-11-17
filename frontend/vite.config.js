@@ -11,6 +11,7 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
+    // Vite automatically handles client-side routing in dev mode
   },
   // Preview server configuration for testing production builds
   preview: {

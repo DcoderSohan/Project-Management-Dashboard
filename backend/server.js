@@ -9,6 +9,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
+import { existsSync } from "fs";
 import { getGoogleSheet } from "./config/googleSheetConfig.js";
 import projectRoutes from "./routes/projectRoutes.js";
 import taskRoutes from "./routes/taskRoutes.js";
@@ -43,6 +44,16 @@ app.use(express.json()); //parse incoming JSON requests
 // Serve uploaded files statically
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
+// ✅ Serve static files from React app build (for production)
+const frontendBuildPath = path.join(__dirname, "..", "frontend", "dist");
+const frontendIndexPath = path.join(frontendBuildPath, "index.html");
+
+// Check if frontend build exists and serve static files
+if (existsSync(frontendBuildPath)) {
+  app.use(express.static(frontendBuildPath));
+  console.log("✅ Serving static files from frontend/dist");
+}
+
 //5. Basic test route
 // app.get("/", (req, res) => {
 //   res.send("Backend server is running successfully!");
@@ -63,9 +74,6 @@ console.log("✅ Auth routes registered at /api/auth");
 console.log("   - GET  /api/auth/check-admin");
 console.log("   - POST /api/auth/signup");
 console.log("   - POST /api/auth/login");
-
-// health
-app.get("/", (req, res) => res.send("Backend running"));
 
 // Test auth endpoint
 app.get("/api/auth/test", (req, res) => {
@@ -121,6 +129,31 @@ app.get("/api/test/reminders", async (req, res) => {
       error: error.message,
     });
   }
+});
+
+// ✅ Catch-all handler: serve React app for all non-API routes
+// This fixes the 404 error when reloading pages with client-side routing
+// Must be placed AFTER all API routes
+app.get("*", (req, res) => {
+  // Skip API routes and uploads (shouldn't reach here, but safety check)
+  if (req.path.startsWith("/api") || req.path.startsWith("/uploads")) {
+    return res.status(404).json({ error: "Route not found" });
+  }
+  
+  // If frontend build exists, serve index.html (for production)
+  if (existsSync(frontendIndexPath)) {
+    return res.sendFile(path.resolve(frontendIndexPath));
+  }
+  
+  // For development: redirect to Vite dev server or show message
+  // In development, frontend runs on separate port (usually 5173)
+  res.status(200).json({
+    message: "Backend server is running",
+    note: "In development, access the frontend through Vite dev server (usually http://localhost:5173)",
+    note2: "In production, build the frontend (npm run build) and it will be served from this server",
+    frontendPath: frontendBuildPath,
+    frontendExists: existsSync(frontendBuildPath),
+  });
 });
 
 //6. Define server PORT (from .env or fallback to 5000)
