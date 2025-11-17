@@ -19,13 +19,25 @@ import uploadRoutes from "./routes/uploadRoutes.js";
 import profileUploadRoutes from "./routes/profileUploadRoutes.js";
 import accessRoutes from "./routes/accessRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
-import "./automation/reminderJob.js";
+
+// Import reminder job (load asynchronously to prevent blocking startup)
+// Use dynamic import to handle errors gracefully
+import("./automation/reminderJob.js")
+  .then(() => {
+    console.log("✅ Reminder job module loaded");
+  })
+  .catch((error) => {
+    console.warn("⚠️ Warning: Could not load reminder job module:", error.message);
+    console.warn("   Reminder functionality may not work, but server will continue");
+  });
 
 //2. Initialize environment variables
 dotenv.config();
+console.log("✅ Environment variables loaded");
 
 //3. Create an express app
 const app = express();
+console.log("✅ Express app created");
 
 // Get directory path for static files
 const __filename = fileURLToPath(import.meta.url);
@@ -60,14 +72,20 @@ if (existsSync(frontendBuildPath)) {
 // });
 
 // ✅ Use routes
-app.use("/api/projects", projectRoutes);
-app.use("/api/tasks", taskRoutes);
-app.use("/api/users", userRoutes);
-app.use("/api/dashboard", dashboardRoutes);
-app.use("/api/upload", uploadRoutes);
-app.use("/api/profile-upload", profileUploadRoutes);
-app.use("/api/access", accessRoutes);
-app.use("/api/auth", authRoutes);
+try {
+  app.use("/api/projects", projectRoutes);
+  app.use("/api/tasks", taskRoutes);
+  app.use("/api/users", userRoutes);
+  app.use("/api/dashboard", dashboardRoutes);
+  app.use("/api/upload", uploadRoutes);
+  app.use("/api/profile-upload", profileUploadRoutes);
+  app.use("/api/access", accessRoutes);
+  app.use("/api/auth", authRoutes);
+  console.log("✅ All API routes registered");
+} catch (error) {
+  console.error("❌ Error registering routes:", error);
+  throw error;
+}
 
 // Debug: Log all registered routes
 console.log("✅ Auth routes registered at /api/auth");
@@ -135,31 +153,59 @@ app.get("/api/test/reminders", async (req, res) => {
 // This fixes the 404 error when reloading pages with client-side routing
 // Must be placed AFTER all API routes
 app.get("*", (req, res) => {
-  // Skip API routes and uploads (shouldn't reach here, but safety check)
-  if (req.path.startsWith("/api") || req.path.startsWith("/uploads")) {
-    return res.status(404).json({ error: "Route not found" });
+  try {
+    // Skip API routes and uploads (shouldn't reach here, but safety check)
+    if (req.path.startsWith("/api") || req.path.startsWith("/uploads")) {
+      return res.status(404).json({ error: "Route not found" });
+    }
+    
+    // If frontend build exists, serve index.html (for production)
+    if (existsSync(frontendIndexPath)) {
+      const resolvedPath = path.resolve(frontendIndexPath);
+      return res.sendFile(resolvedPath);
+    }
+    
+    // For development: redirect to Vite dev server or show message
+    // In development, frontend runs on separate port (usually 5173)
+    res.status(200).json({
+      message: "Backend server is running",
+      note: "In development, access the frontend through Vite dev server (usually http://localhost:5173)",
+      note2: "In production, build the frontend (npm run build) and it will be served from this server",
+    });
+  } catch (error) {
+    console.error("❌ Error in catch-all route:", error.message);
+    res.status(500).json({
+      error: "Internal server error",
+      message: error.message,
+    });
   }
-  
-  // If frontend build exists, serve index.html (for production)
-  if (existsSync(frontendIndexPath)) {
-    return res.sendFile(path.resolve(frontendIndexPath));
-  }
-  
-  // For development: redirect to Vite dev server or show message
-  // In development, frontend runs on separate port (usually 5173)
-  res.status(200).json({
-    message: "Backend server is running",
-    note: "In development, access the frontend through Vite dev server (usually http://localhost:5173)",
-    note2: "In production, build the frontend (npm run build) and it will be served from this server",
-    frontendPath: frontendBuildPath,
-    frontendExists: existsSync(frontendBuildPath),
-  });
 });
 
 //6. Define server PORT (from .env or fallback to 5000)
 const PORT = process.env.PORT || 5000;
 
-//7. Start the server
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+//7. Start the server with error handling
+try {
+  app.listen(PORT, () => {
+    console.log(`✅ Server running on port ${PORT}`);
+    console.log(`✅ Environment: ${process.env.NODE_ENV || 'development'}`);
+  });
+
+  // Handle unhandled promise rejections
+  process.on('unhandledRejection', (error) => {
+    console.error('❌ Unhandled Promise Rejection:', error);
+    // Don't exit in production, just log
+    if (process.env.NODE_ENV !== 'production') {
+      process.exit(1);
+    }
+  });
+
+  // Handle uncaught exceptions
+  process.on('uncaughtException', (error) => {
+    console.error('❌ Uncaught Exception:', error);
+    process.exit(1);
+  });
+} catch (error) {
+  console.error('❌ Failed to start server:', error);
+  process.exit(1);
+}
