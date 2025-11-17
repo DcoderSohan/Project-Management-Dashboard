@@ -82,6 +82,7 @@ if (existsSync(frontendBuildPath)) {
     
     if (hasExtension) {
       // It's a static file - let express.static handle it
+      // With fallthrough: true, express.static will call next() if file doesn't exist
       staticMiddleware(req, res, next);
     } else {
       // Not a static file - pass to catch-all route
@@ -92,6 +93,10 @@ if (existsSync(frontendBuildPath)) {
   console.log("✅ Serving static files from frontend/dist");
   console.log(`✅ Frontend index.html path: ${frontendIndexPath}`);
   console.log(`✅ Frontend index.html exists: ${existsSync(frontendIndexPath)}`);
+} else {
+  console.warn(`⚠️ Frontend build not found at: ${frontendBuildPath}`);
+  console.warn(`   This is expected in development mode.`);
+  console.warn(`   In production, make sure to build the frontend first.`);
 }
 
 //5. Basic test route
