@@ -215,7 +215,7 @@ app.use((req, res) => {
   // For ALL GET requests that are not API/uploads and not static files, serve index.html
   // This includes routes like /login, /projects, /timeline, /tasks, etc.
   // Static files (with extensions) are handled by express.static above
-  // If a static file doesn't exist, express.static will return 404 before reaching here
+  // If a static file doesn't exist, express.static will call next() due to fallthrough: true
   try {
     // If frontend build exists, serve index.html (for production)
     // This allows React Router to handle client-side routing
@@ -226,11 +226,12 @@ app.use((req, res) => {
       res.setHeader('Content-Type', 'text/html');
       res.sendFile(resolvedPath, (err) => {
         if (err) {
-          console.error(`❌ Error sending index.html:`, err.message);
+          console.error(`❌ Error sending index.html for ${req.path}:`, err.message);
           if (!res.headersSent) {
             res.status(500).json({
               error: "Error serving frontend",
               message: err.message,
+              path: req.path,
             });
           }
         }
@@ -240,8 +241,12 @@ app.use((req, res) => {
     
     // Frontend build not found - this should not happen in production
     console.error(`❌ Frontend build not found at: ${frontendIndexPath}`);
+    console.error(`   Requested path: ${req.path}`);
     console.error(`   Build path: ${frontendBuildPath}`);
     console.error(`   Build path exists: ${existsSync(frontendBuildPath)}`);
+    console.error(`   Index path exists: ${existsSync(frontendIndexPath)}`);
+    
+    // Try to provide helpful error message
     if (!res.headersSent) {
       res.status(503).json({
         error: "Frontend not built",
@@ -250,15 +255,19 @@ app.use((req, res) => {
         buildPath: frontendBuildPath,
         exists: existsSync(frontendIndexPath),
         buildExists: existsSync(frontendBuildPath),
+        requestedPath: req.path,
+        note: "In Render, make sure the build command includes: cd frontend && npm install && npm run build",
       });
     }
   } catch (error) {
     console.error("❌ Error in catch-all route:", error.message);
+    console.error("   Requested path:", req.path);
     console.error("Full error:", error);
     if (!res.headersSent) {
       res.status(500).json({
         error: "Internal server error",
         message: error.message,
+        path: req.path,
       });
     }
   }
