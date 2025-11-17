@@ -218,28 +218,43 @@ app.use((req, res) => {
       console.log(`✅ Serving index.html for client-side route: ${req.path}`);
       // Set proper headers
       res.setHeader('Content-Type', 'text/html');
-      return res.sendFile(resolvedPath);
+      res.sendFile(resolvedPath, (err) => {
+        if (err) {
+          console.error(`❌ Error sending index.html:`, err.message);
+          if (!res.headersSent) {
+            res.status(500).json({
+              error: "Error serving frontend",
+              message: err.message,
+            });
+          }
+        }
+      });
+      return;
     }
     
     // Frontend build not found - this should not happen in production
     console.error(`❌ Frontend build not found at: ${frontendIndexPath}`);
     console.error(`   Build path: ${frontendBuildPath}`);
     console.error(`   Build path exists: ${existsSync(frontendBuildPath)}`);
-    res.status(503).json({
-      error: "Frontend not built",
-      message: "The frontend build is missing. Please build the frontend before deploying.",
-      frontendPath: frontendIndexPath,
-      buildPath: frontendBuildPath,
-      exists: existsSync(frontendIndexPath),
-      buildExists: existsSync(frontendBuildPath),
-    });
+    if (!res.headersSent) {
+      res.status(503).json({
+        error: "Frontend not built",
+        message: "The frontend build is missing. Please build the frontend before deploying.",
+        frontendPath: frontendIndexPath,
+        buildPath: frontendBuildPath,
+        exists: existsSync(frontendIndexPath),
+        buildExists: existsSync(frontendBuildPath),
+      });
+    }
   } catch (error) {
     console.error("❌ Error in catch-all route:", error.message);
     console.error("Full error:", error);
-    res.status(500).json({
-      error: "Internal server error",
-      message: error.message,
-    });
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: "Internal server error",
+        message: error.message,
+      });
+    }
   }
 });
 
