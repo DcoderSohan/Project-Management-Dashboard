@@ -1,12 +1,15 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useEffect, useRef } from "react";
+import { gantt } from "dhtmlx-gantt";
+import "dhtmlx-gantt/codebase/dhtmlxgantt.css";
 import { getOverlapWarnings } from "../utils/taskOverlap";
 
 /**
  * GanttChart Component
- * Displays tasks in a Gantt chart format with custom implementation
- * Fallback from SVAR library due to compatibility issues
+ * Displays tasks in a Gantt chart format using dhtmlx-gantt library
  */
 export default function GanttChart({ projects = [], tasks = [], selectedProjectId = null }) {
+  const ganttContainer = useRef(null);
+
   // Filter tasks by selected project if provided
   const filteredTasks = useMemo(() => {
     if (!selectedProjectId) return tasks;
@@ -18,48 +21,6 @@ export default function GanttChart({ projects = [], tasks = [], selectedProjectI
     return getOverlapWarnings(filteredTasks);
   }, [filteredTasks]);
 
-  // Calculate date range for the chart
-  const dateRange = useMemo(() => {
-    const allDates = [];
-    
-    // Add project dates
-    projects.forEach((project) => {
-      if (project.startDate) allDates.push(new Date(project.startDate));
-      if (project.endDate) allDates.push(new Date(project.endDate));
-    });
-    
-    // Add task dates
-    filteredTasks.forEach((task) => {
-      if (task.startDate) allDates.push(new Date(task.startDate));
-      if (task.endDate) allDates.push(new Date(task.endDate));
-    });
-
-    if (allDates.length === 0) {
-      const today = new Date();
-      const start = new Date(today);
-      start.setMonth(start.getMonth() - 1);
-      const end = new Date(today);
-      end.setMonth(end.getMonth() + 3);
-      return { start, end };
-    }
-
-    const minDate = new Date(Math.min(...allDates));
-    const maxDate = new Date(Math.max(...allDates));
-    
-    // Add padding
-    minDate.setDate(minDate.getDate() - 7);
-    maxDate.setDate(maxDate.getDate() + 7);
-    
-    return { start: minDate, end: maxDate };
-  }, [projects, filteredTasks]);
-
-  // Calculate number of days in range
-  const daysInRange = useMemo(() => {
-    const diffTime = Math.abs(dateRange.end - dateRange.start);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
-  }, [dateRange]);
-
   // Get project name helper
   const getProjectName = (projectId) => {
     const project = projects.find((p) => p.id === projectId);
@@ -69,92 +30,117 @@ export default function GanttChart({ projects = [], tasks = [], selectedProjectI
   // Get status color
   const getStatusColor = (status, hasOverlap) => {
     if (hasOverlap) {
-      return {
-        bg: "bg-yellow-500",
-        gradient: "from-yellow-500 to-orange-500",
-        border: "border-yellow-600",
-      };
+      return "#eab308"; // Yellow for overlapping
     }
     
     switch (status) {
       case "Completed":
-        return {
-          bg: "bg-green-600",
-          gradient: "from-green-600 to-green-500",
-          border: "border-green-700",
-        };
+        return "#16a34a"; // Green
       case "In Progress":
-        return {
-          bg: "bg-blue-600",
-          gradient: "from-blue-600 to-blue-500",
-          border: "border-blue-700",
-        };
+        return "#2563eb"; // Blue
       case "Blocked":
-        return {
-          bg: "bg-red-600",
-          gradient: "from-red-600 to-red-500",
-          border: "border-red-700",
-        };
+        return "#dc2626"; // Red
       default:
-        return {
-          bg: "bg-gray-400",
-          gradient: "from-gray-400 to-gray-300",
-          border: "border-gray-500",
-        };
+        return "#9ca3af"; // Gray
     }
   };
 
-  // Calculate position and width for a task bar
-  const getTaskBarStyle = (task) => {
-    if (!task.startDate || !task.endDate) {
-      return { display: "none" };
+  // Transform tasks to dhtmlx-gantt format
+  const ganttData = useMemo(() => {
+    const tasksWithDates = filteredTasks.filter((task) => task.startDate && task.endDate);
+    
+    if (tasksWithDates.length === 0) {
+      return { data: [], links: [] };
     }
 
-    const startDate = new Date(task.startDate);
-    const endDate = new Date(task.endDate);
-    
-    const startOffset = Math.max(0, (startDate - dateRange.start) / (1000 * 60 * 60 * 24));
-    const endOffset = (endDate - dateRange.start) / (1000 * 60 * 60 * 24);
-    const width = Math.max(1, endOffset - startOffset);
-
-    const leftPercent = (startOffset / daysInRange) * 100;
-    const widthPercent = (width / daysInRange) * 100;
-
-    return {
-      left: `${leftPercent}%`,
-      width: `${widthPercent}%`,
-    };
-  };
-
-  // Generate date labels for the timeline
-  const dateLabels = useMemo(() => {
-    const labels = [];
-    const currentDate = new Date(dateRange.start);
-    const endDate = new Date(dateRange.end);
-    
-    // Show labels for each week
-    while (currentDate <= endDate) {
-      labels.push(new Date(currentDate));
-      currentDate.setDate(currentDate.getDate() + 7);
-    }
-    
-    return labels;
-  }, [dateRange]);
-
-  // Group tasks by project
-  const tasksByProject = useMemo(() => {
-    const grouped = {};
-    filteredTasks.forEach((task) => {
-      if (!grouped[task.projectId]) {
-        grouped[task.projectId] = [];
+    const data = tasksWithDates.map((task, index) => {
+      const hasOverlap = overlapWarnings[task.id]?.length > 0;
+      const startDate = new Date(task.startDate);
+      const endDate = new Date(task.endDate);
+      
+      // Calculate progress based on status
+      let progress = 0;
+      if (task.status === "Completed") {
+        progress = 100;
+      } else if (task.status === "In Progress") {
+        progress = task.progress || 50;
+      } else if (task.status === "Blocked") {
+        progress = task.progress || 25;
       }
-      grouped[task.projectId].push(task);
-    });
-    return grouped;
-  }, [filteredTasks]);
 
-  // Get all project IDs that have tasks
-  const projectIdsWithTasks = Object.keys(tasksByProject);
+      // Create task text with project name
+      const projectName = getProjectName(task.projectId);
+      const taskText = selectedProjectId 
+        ? task.title 
+        : `${projectName} - ${task.title}`;
+
+      return {
+        id: task.id || `task-${index}`,
+        text: taskText,
+        start_date: startDate,
+        end_date: endDate,
+        progress: progress / 100,
+        color: getStatusColor(task.status, hasOverlap),
+        open: true,
+        type: "task",
+        // Store original task data
+        originalTask: task,
+        hasOverlap: hasOverlap,
+      };
+    });
+
+    return { data, links: [] };
+  }, [filteredTasks, overlapWarnings, selectedProjectId, projects]);
+
+  // Initialize Gantt chart
+  useEffect(() => {
+    if (!ganttContainer.current) return;
+
+    // Configure Gantt
+    gantt.config.date_format = "%Y-%m-%d";
+    
+    // Configure columns
+    gantt.config.columns = [
+      { name: "text", label: "Task Name", width: "*", tree: true },
+      { name: "start_date", label: "Start Date", width: 120, align: "center", template: (task) => {
+        return gantt.templates.format_date(task.start_date, "date");
+      }},
+      { name: "end_date", label: "End Date", width: 120, align: "center", template: (task) => {
+        return gantt.templates.format_date(task.end_date, "date");
+      }},
+      { name: "progress", label: "Progress", width: 80, align: "center", template: (task) => `${Math.round(task.progress * 100)}%` },
+    ];
+
+    // Configure scales
+    gantt.config.scale_unit = "day";
+    gantt.config.date_scale = "%M %d";
+    gantt.config.subscales = [
+      { unit: "week", step: 1, date: "%W" }
+    ];
+    
+    // Configure date templates
+    gantt.templates.date_format = (date) => {
+      return gantt.templates.format_date(date, "%Y-%m-%d");
+    };
+
+    // Configure task height
+    gantt.config.row_height = 40;
+    gantt.config.bar_height = 25;
+
+    // Initialize Gantt
+    gantt.init(ganttContainer.current);
+
+    // Load data
+    gantt.clearAll();
+    gantt.parse(ganttData);
+
+    // Cleanup on unmount
+    return () => {
+      if (ganttContainer.current) {
+        gantt.clearAll();
+      }
+    };
+  }, [ganttData]);
 
   // Filter tasks with dates
   const tasksWithDates = filteredTasks.filter((task) => task.startDate && task.endDate);
@@ -172,7 +158,7 @@ export default function GanttChart({ projects = [], tasks = [], selectedProjectI
   return (
     <div className="w-full overflow-x-auto">
       <div className="min-w-full bg-white rounded-lg shadow-md p-4">
-        {/* Timeline Header */}
+        {/* Header */}
         <div className="mb-4 border-b pb-4">
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-2 gap-2">
             <h3 className="text-lg font-semibold text-gray-800">
@@ -181,132 +167,21 @@ export default function GanttChart({ projects = [], tasks = [], selectedProjectI
                 : "Timeline View - All Projects"}
             </h3>
             <div className="text-sm text-gray-600">
-              {tasksWithDates.length} task(s) | {projectIdsWithTasks.length} project(s)
+              {tasksWithDates.length} task(s) | {new Set(filteredTasks.map(t => t.projectId)).size} project(s)
             </div>
-          </div>
-          
-          {/* Date scale */}
-          <div className="relative h-10 border-t border-gray-300 mt-4">
-            {dateLabels.map((date, index) => {
-              const position = ((date - dateRange.start) / (dateRange.end - dateRange.start)) * 100;
-              return (
-                <div
-                  key={index}
-                  className="absolute top-0 transform -translate-x-1/2"
-                  style={{ left: `${position}%` }}
-                >
-                  <div className="w-px h-full bg-gray-300"></div>
-                  <div className="text-xs text-gray-600 mt-1 whitespace-nowrap">
-                    {date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                  </div>
-                </div>
-              );
-            })}
           </div>
         </div>
 
-        {/* Gantt Chart Content */}
-        <div className="space-y-6">
-          {projectIdsWithTasks.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              No tasks with dates found. Add start and end dates to tasks to see them on the timeline.
-            </div>
-          ) : (
-            projectIdsWithTasks.map((projectId) => {
-              const projectTasks = tasksByProject[projectId];
-              const project = projects.find((p) => p.id === projectId);
-              
-              return (
-                <div key={projectId} className="border-b border-gray-200 pb-6 last:border-b-0">
-                  {/* Project Header */}
-                  <div className="mb-3 flex items-center gap-2">
-                    <h4 className="font-semibold text-gray-700 text-lg">{getProjectName(projectId)}</h4>
-                    {project && project.startDate && project.endDate && (
-                      <span className="text-xs text-gray-500">
-                        ({project.startDate} - {project.endDate})
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Tasks for this project */}
-                  <div className="space-y-3">
-                    {projectTasks
-                      .filter((task) => task.startDate && task.endDate)
-                      .map((task) => {
-                        const hasOverlap = overlapWarnings[task.id]?.length > 0;
-                        const barStyle = getTaskBarStyle(task);
-                        const colors = getStatusColor(task.status, hasOverlap);
-                        const progress = task.status === "Completed" ? 100 : 
-                                        task.status === "In Progress" ? (task.progress || 50) : 
-                                        task.status === "Blocked" ? (task.progress || 25) : 0;
-                        
-                        return (
-                          <div
-                            key={task.id || Math.random()}
-                            className="relative h-14 flex flex-col md:flex-row items-start md:items-center gap-2"
-                          >
-                            {/* Task label */}
-                            <div className="w-full md:w-56 flex-shrink-0 pr-2">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-sm font-medium text-gray-700 truncate" title={task.title}>
-                                  {task.title}
-                                </span>
-                                {hasOverlap && (
-                                  <span
-                                    className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded whitespace-nowrap"
-                                    title={`Overlaps with ${overlapWarnings[task.id].length} other task(s)`}
-                                  >
-                                    ⚠ Overlap
-                                  </span>
-                                )}
-                              </div>
-                              {/* Task dates - show on mobile */}
-                              <div className="md:hidden text-xs text-gray-600 mt-1">
-                                {task.startDate} - {task.endDate}
-                              </div>
-                            </div>
-
-                            {/* Task bar container */}
-                            <div className="flex-1 relative h-8 bg-gray-100 rounded-lg w-full md:w-auto border border-gray-200 overflow-hidden">
-                              {/* Task bar background */}
-                              <div
-                                className={`absolute top-0 left-0 h-full rounded-lg bg-gradient-to-r ${colors.gradient} ${colors.border} border-2 transition-all hover:opacity-90 cursor-pointer shadow-sm`}
-                                style={barStyle}
-                                title={`${task.title} (${task.startDate} - ${task.endDate}) - ${task.status || 'Not Started'}`}
-                              >
-                                {/* Progress indicator */}
-                                {progress > 0 && (
-                                  <div 
-                                    className="absolute top-0 left-0 h-full bg-white bg-opacity-30 rounded-lg"
-                                    style={{ width: `${progress}%` }}
-                                  />
-                                )}
-                                {/* Task title on bar - desktop only */}
-                                <div className="h-full flex items-center justify-center text-white text-xs px-2 truncate hidden md:flex font-medium">
-                                  {task.title}
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Task dates - show on desktop */}
-                            <div className="hidden md:block w-48 flex-shrink-0 pl-2 text-xs text-gray-600">
-                              {task.startDate} - {task.endDate}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    
-                    {projectTasks.filter((task) => task.startDate && task.endDate).length === 0 && (
-                      <div className="text-sm text-gray-500 italic pl-0 md:pl-56">
-                        No tasks with dates for this project
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
+        {/* Gantt Chart Container */}
+        <div 
+          ref={ganttContainer} 
+          className="gantt-container"
+          style={{ 
+            width: "100%", 
+            height: "600px",
+            minHeight: "400px"
+          }}
+        />
 
         {/* Legend */}
         <div className="mt-6 pt-4 border-t flex flex-wrap gap-4 text-xs md:text-sm">
@@ -327,11 +202,32 @@ export default function GanttChart({ projects = [], tasks = [], selectedProjectI
             <span>Not Started</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-yellow-500 rounded border-2 border-yellow-600"></div>
+            <div className="w-4 h-4 bg-yellow-500 rounded"></div>
             <span>Overlapping tasks</span>
           </div>
         </div>
       </div>
+
+      {/* Custom CSS for Gantt chart styling */}
+      <style>{`
+        .gantt-container {
+          font-family: inherit;
+        }
+        
+        /* Override Gantt chart colors to match our theme */
+        .gantt_task_line {
+          border-radius: 4px;
+        }
+        
+        .gantt_task_progress {
+          border-radius: 4px;
+        }
+        
+        /* Ensure proper scrolling */
+        .gantt_layout_content {
+          overflow-x: auto;
+        }
+      `}</style>
     </div>
   );
 }
