@@ -68,11 +68,18 @@ api.interceptors.response.use(
       const attemptedURL = (error.config?.baseURL || "unknown") + (error.config?.url || "");
       console.error("Request URL:", attemptedURL);
       console.error("Base URL:", error.config?.baseURL || "NOT SET");
+      console.error("Error code:", error.code);
+      console.error("Error message:", error.message);
       console.error("This usually means:");
       console.error("  1. Backend server is not running");
       console.error("  2. CORS is blocking the request");
       console.error("  3. Network connectivity issue");
-      console.error("  4. VITE_API_URL environment variable not set in production");
+      if (import.meta.env.PROD && !import.meta.env.VITE_API_URL) {
+        console.error("  4. ⚠️ VITE_API_URL environment variable not set in production - THIS IS REQUIRED!");
+      }
+      
+      // Don't throw for network errors in some cases - let the component handle it
+      // This prevents the app from crashing on initial load if backend is temporarily unavailable
     }
     
     if (error.response?.status === 401) {

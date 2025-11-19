@@ -240,8 +240,11 @@ app.use((req, res) => {
     if (existsSync(frontendIndexPath)) {
       const resolvedPath = path.resolve(frontendIndexPath);
       console.log(`✅ Serving index.html for client-side route: ${req.path}`);
-      // Set proper headers
-      res.setHeader('Content-Type', 'text/html');
+      // Set proper headers to prevent caching issues
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
       res.sendFile(resolvedPath, (err) => {
         if (err) {
           console.error(`❌ Error sending index.html for ${req.path}:`, err.message);

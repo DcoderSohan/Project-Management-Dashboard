@@ -17,9 +17,12 @@ export function AuthProvider({ children }) {
           setUser(userData);
         } catch (error) {
           console.error("Error loading user:", error);
-          // Token might be invalid, clear it
-          localStorage.removeItem("authToken");
-          setToken(null);
+          // Only clear token if it's an authentication error (401/403), not network errors
+          if (error.response?.status === 401 || error.response?.status === 403) {
+            localStorage.removeItem("authToken");
+            setToken(null);
+          }
+          // For network errors, keep the token but don't set user (will retry on next action)
         }
       }
       setLoading(false);
@@ -103,9 +106,20 @@ export function AuthProvider({ children }) {
         const attemptedURL = baseURL + (error.config?.url || "");
         console.error("Attempted URL:", attemptedURL);
         console.error("Base URL from config:", error.config?.baseURL || "NOT SET");
+        
+        // Provide more helpful error message based on environment
+        let errorMessage = "Cannot connect to server.";
+        if (!import.meta.env.VITE_API_URL && import.meta.env.PROD) {
+          errorMessage += " VITE_API_URL environment variable is not set. Please configure it in your deployment settings.";
+        } else if (error.code === 'ERR_NETWORK' || error.message.includes('Network Error')) {
+          errorMessage += " Please check if the backend server is running and accessible.";
+        } else {
+          errorMessage += " Please check your connection and try again.";
+        }
+        
         return { 
           success: false, 
-          error: "Cannot connect to server. Please check if the backend is running."
+          error: errorMessage
         };
       }
       
