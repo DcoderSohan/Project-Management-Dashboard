@@ -9,13 +9,28 @@ export const getDashboardData = async (req, res) => {
     // Read all tasks
     const { rows: taskRows } = await readSheetValues("Tasks");
     
-    // Read all projects to map project IDs to names
+    // Read all projects to map project IDs to names and status
+    // Projects columns: ID, Name, Owner, Description, StartDate, EndDate, Status, Progress
     const { rows: projectRows } = await readSheetValues("Projects");
     const projectMap = {};
+    const projectStatusMap = {}; // Track project completion status
     (projectRows || []).forEach((row) => {
       const projectId = row[0]; // ID
       const projectName = row[1]; // Name
+      const projectStatus = (row[6] || "").trim().toLowerCase(); // Status (column 6)
       projectMap[projectId] = projectName;
+      projectStatusMap[projectId] = projectStatus === "completed";
+    });
+
+    // Read all users to map emails to names
+    const { rows: userRows } = await readSheetValues("Users");
+    const userEmailToNameMap = {};
+    (userRows || []).forEach((row) => {
+      const userEmail = (row[2] || "").trim(); // Email
+      const userName = (row[1] || "").trim(); // Name
+      if (userEmail && userName) {
+        userEmailToNameMap[userEmail.toLowerCase()] = userName;
+      }
     });
 
     if (!taskRows || taskRows.length === 0) {
@@ -78,33 +93,39 @@ export const getDashboardData = async (req, res) => {
         }
       }
 
-      // Track employee workload
+      // Track employee workload - use name if available, otherwise email
       if (assignedTo) {
-        if (!employeeWorkload[assignedTo]) {
-          employeeWorkload[assignedTo] = 0;
+        const employeeName = userEmailToNameMap[assignedTo.toLowerCase()] || assignedTo;
+        if (!employeeWorkload[employeeName]) {
+          employeeWorkload[employeeName] = 0;
         }
-        employeeWorkload[assignedTo]++;
+        employeeWorkload[employeeName]++;
       }
 
-      // Check for overdue tasks
+      // Check for overdue tasks - exclude tasks from completed projects
       if (dueDate && statusLower !== "completed") {
-        try {
-          const due = new Date(dueDate);
-          due.setHours(0, 0, 0, 0);
-          if (due < today) {
-            overdueTasks.push({
-              id: taskId,
-              title: title,
-              projectId: projectId,
-              project: projectMap[projectId] || projectId,
-              assignedTo: assignedTo,
-              status: status,
-              dueDate: dueDate,
-            });
+        // Skip if project is completed
+        if (projectStatusMap[projectId]) {
+          // Project is completed, skip this task
+        } else {
+          try {
+            const due = new Date(dueDate);
+            due.setHours(0, 0, 0, 0);
+            if (due < today) {
+              overdueTasks.push({
+                id: taskId,
+                title: title,
+                projectId: projectId,
+                project: projectMap[projectId] || projectId,
+                assignedTo: assignedTo,
+                status: status,
+                dueDate: dueDate,
+              });
+            }
+          } catch (dateError) {
+            // Skip invalid dates
+            console.warn(`Invalid due date for task ${taskId}: ${dueDate}`);
           }
-        } catch (dateError) {
-          // Skip invalid dates
-          console.warn(`Invalid due date for task ${taskId}: ${dueDate}`);
         }
       }
     });
@@ -126,11 +147,11 @@ export const getDashboardData = async (req, res) => {
     // Sort projects by progress (descending)
     projectCompletion.sort((a, b) => b.progress - a.progress);
 
-    // Sort employee workload by count (descending)
+    // Sort employee workload by count (descending) and convert to array format
     const sortedEmployeeWorkload = Object.entries(employeeWorkload)
       .sort(([, a], [, b]) => b - a)
-      .reduce((acc, [employee, count]) => {
-        acc[employee] = count;
+      .reduce((acc, [employeeName, count]) => {
+        acc[employeeName] = count;
         return acc;
       }, {});
 

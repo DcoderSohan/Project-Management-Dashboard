@@ -26,9 +26,13 @@ import {
 } from "recharts";
 
 const COLORS = {
-  "Not Started": "#f97316",
-  "In Progress": "#3b82f6",
-  "Completed": "#10b981",
+  "pending": "#f97316",
+  "Pending": "#f97316", // Backward compatibility
+  "Not Started": "#f97316", // Backward compatibility
+  "inProgress": "#3b82f6",
+  "In Progress": "#3b82f6", // Backward compatibility
+  "completed": "#10b981",
+  "Completed": "#10b981", // Backward compatibility
   overdue: "#ef4444",
 };
 
@@ -157,7 +161,7 @@ export default function Dashboard() {
               {error || "Failed to load dashboard data"}
             </p>
             <p className="text-sm text-gray-500 mb-4">
-              Please make sure the backend server is running on http://localhost:5000
+              Please check your connection and try again.
             </p>
             <button
               onClick={fetchData}
@@ -172,33 +176,51 @@ export default function Dashboard() {
     );
   }
 
-  // Prepare data for charts - ensure we have valid data
-  const statusCounts = dashboard.statusCounts || {};
+  // Prepare data for charts - ensure we have valid data with null checks
+  const statusCounts = dashboard?.statusCounts || {};
+  
+  // Map status names to requested format: pending, inProgress, completed
+  const statusNameMap = {
+    "Not Started": "pending",
+    "In Progress": "inProgress",
+    "Completed": "completed"
+  };
+  
   const statusChartData = Object.entries(statusCounts)
-    .filter(([_, value]) => value > 0) // Only show statuses with tasks
-    .map(([name, value]) => ({ name, value }));
+    .filter(([_, value]) => value != null && value > 0) // Only show statuses with tasks
+    .map(([name, value]) => ({ 
+      name: statusNameMap[name] || name, 
+      value: value || 0 
+    }))
+    .filter(item => item.value > 0); // Final filter to ensure no zero values
 
-  const projectChartData = (dashboard.projectCompletion || [])
+  const projectChartData = (dashboard?.projectCompletion || [])
+    .filter(project => project != null && project.project != null && project.progress != null)
     .slice(0, 10) // Show top 10 projects
     .map((project) => ({
-      name: project.project.length > 15 
+      name: project.project && project.project.length > 15 
         ? project.project.substring(0, 15) + "..." 
-        : project.project,
-      progress: project.progress,
-      fullName: project.project,
-    }));
+        : project.project || "Unknown",
+      progress: project.progress || 0,
+      fullName: project.project || "Unknown",
+      completedTasks: project.completedTasks || 0,
+      totalTasks: project.totalTasks || 0,
+    }))
+    .filter(project => project.totalTasks > 0); // Only show projects with tasks
 
-  const employeeWorkloadData = Object.entries(dashboard.employeeWorkload || {})
+  const employeeWorkloadData = Object.entries(dashboard?.employeeWorkload || {})
+    .filter(([name, value]) => name != null && value != null && value > 0)
     .slice(0, 10) // Show top 10 employees
     .map(([name, value]) => ({
-      name: name.includes("@") ? name.split("@")[0] : name,
-      tasks: value,
-      fullEmail: name,
+      name: name || "Unknown",
+      tasks: value || 0,
+      fullName: name || "Unknown",
     }))
-    .sort((a, b) => b.tasks - a.tasks);
+    .sort((a, b) => (b.tasks || 0) - (a.tasks || 0))
+    .filter(item => item.tasks > 0); // Only show employees with tasks
 
-  const completedTasks = dashboard.statusCounts?.Completed || 0;
-  const totalTasks = dashboard.totalTasks || 0;
+  const completedTasks = dashboard?.statusCounts?.["Completed"] || dashboard?.statusCounts?.Completed || 0;
+  const totalTasks = dashboard?.totalTasks || 0;
   const completionRate = totalTasks > 0 
     ? Math.round((completedTasks / totalTasks) * 100) 
     : 0;
@@ -379,7 +401,7 @@ export default function Dashboard() {
         )}
 
         {/* Project Progress */}
-        {projectChartData.length > 0 && (
+        {projectChartData && projectChartData.length > 0 ? (
           <div className="bg-white rounded-lg shadow-md p-4">
             <h3 className="font-semibold mb-4 border-b pb-2">
               Project Progress (Top 10)
@@ -390,7 +412,10 @@ export default function Dashboard() {
                 <XAxis type="number" domain={[0, 100]} />
                 <YAxis dataKey="name" type="category" width={100} />
                 <Tooltip
-                  formatter={(value) => `${value}%`}
+                  formatter={(value, name, props) => {
+                    const entry = props.payload;
+                    return [`${value}%`, `Completed: ${entry.completedTasks || 0} / ${entry.totalTasks || 0}`];
+                  }}
                   labelFormatter={(label) => `Project: ${label}`}
                 />
                 <Bar dataKey="progress" fill="#10b981" radius={[0, 8, 8, 0]}>
@@ -410,10 +435,19 @@ export default function Dashboard() {
               </BarChart>
             </ResponsiveContainer>
           </div>
+        ) : (
+          <div className="bg-white rounded-lg shadow-md p-4">
+            <h3 className="font-semibold mb-4 border-b pb-2">
+              Project Progress (Top 10)
+            </h3>
+            <div className="flex items-center justify-center h-[250px] text-gray-500">
+              No project data available
+            </div>
+          </div>
         )}
 
         {/* Employee Workload */}
-        {employeeWorkloadData.length > 0 && (
+        {employeeWorkloadData && employeeWorkloadData.length > 0 ? (
           <div className="bg-white rounded-lg shadow-md p-4">
             <h3 className="font-semibold mb-4 border-b pb-2">
               Employee Workload (Top 10)
@@ -430,17 +464,26 @@ export default function Dashboard() {
                 />
                 <YAxis />
                 <Tooltip
-                  formatter={(value) => `${value} tasks`}
-                  labelFormatter={(label) => `Employee: ${label}`}
+                  formatter={(value) => `${value || 0} tasks`}
+                  labelFormatter={(label) => `Employee: ${label || "Unknown"}`}
                 />
                 <Bar dataKey="tasks" fill="#8b5cf6" radius={[8, 8, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
+        ) : (
+          <div className="bg-white rounded-lg shadow-md p-4">
+            <h3 className="font-semibold mb-4 border-b pb-2">
+              Employee Workload (Top 10)
+            </h3>
+            <div className="flex items-center justify-center h-[250px] text-gray-500">
+              No employee data available
+            </div>
+          </div>
         )}
 
         {/* Project Completion Details */}
-        {dashboard.projectCompletion && dashboard.projectCompletion.length > 0 && (
+        {dashboard?.projectCompletion && Array.isArray(dashboard.projectCompletion) && dashboard.projectCompletion.length > 0 ? (
           <div className="bg-white rounded-lg shadow-md p-4 md:col-span-2 lg:col-span-3">
             <h3 className="font-semibold mb-4 border-b pb-2">
               All Projects Completion Status
@@ -457,51 +500,67 @@ export default function Dashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {dashboard.projectCompletion.map((project, index) => (
-                    <tr key={`project-${project.project}-${index}`} className="border-b hover:bg-gray-50">
-                      <td className="p-2 sm:p-3 font-medium">{project.project}</td>
-                      <td className="p-2 sm:p-3">{project.totalTasks}</td>
-                      <td className="p-2 sm:p-3 text-green-600 font-semibold">
-                        {project.completedTasks}
-                      </td>
-                      <td className="p-2 sm:p-3">
-                        <span
-                          className={`font-semibold ${
-                            project.progress === 100
-                              ? "text-green-600"
-                              : project.progress >= 50
-                              ? "text-blue-600"
-                              : "text-orange-600"
-                          }`}
-                        >
-                          {project.progress}%
-                        </span>
-                      </td>
-                      <td className="p-2 sm:p-3">
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div
-                            className={`h-2 rounded-full ${
-                              project.progress === 100
-                                ? "bg-green-600"
-                                : project.progress >= 50
-                                ? "bg-blue-600"
-                                : "bg-orange-600"
-                            }`}
-                            style={{ width: `${project.progress}%` }}
-                          ></div>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {dashboard.projectCompletion
+                    .filter(project => project != null && project.project != null)
+                    .map((project, index) => {
+                      const progress = project.progress != null ? project.progress : 0;
+                      const totalTasks = project.totalTasks || 0;
+                      const completedTasks = project.completedTasks || 0;
+                      return (
+                        <tr key={`project-${project.project || index}-${index}`} className="border-b hover:bg-gray-50">
+                          <td className="p-2 sm:p-3 font-medium">{project.project || "Unknown"}</td>
+                          <td className="p-2 sm:p-3">{totalTasks}</td>
+                          <td className="p-2 sm:p-3 text-green-600 font-semibold">
+                            {completedTasks}
+                          </td>
+                          <td className="p-2 sm:p-3">
+                            <span
+                              className={`font-semibold ${
+                                progress === 100
+                                  ? "text-green-600"
+                                  : progress >= 50
+                                  ? "text-blue-600"
+                                  : "text-orange-600"
+                              }`}
+                            >
+                              {progress}%
+                            </span>
+                          </td>
+                          <td className="p-2 sm:p-3">
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div
+                                className={`h-2 rounded-full ${
+                                  progress === 100
+                                    ? "bg-green-600"
+                                    : progress >= 50
+                                    ? "bg-blue-600"
+                                    : "bg-orange-600"
+                                }`}
+                                style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
+                              ></div>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                 </tbody>
               </table>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-white rounded-lg shadow-md p-4 md:col-span-2 lg:col-span-3">
+            <h3 className="font-semibold mb-4 border-b pb-2">
+              All Projects Completion Status
+            </h3>
+            <div className="flex items-center justify-center h-[100px] text-gray-500">
+              No project completion data available
             </div>
           </div>
         )}
       </section>
 
       {/* Overdue Tasks Section */}
-      {dashboard.overdueTasks && dashboard.overdueTasks.length > 0 && (
+      {dashboard?.overdueTasks && Array.isArray(dashboard.overdueTasks) && dashboard.overdueTasks.length > 0 ? (
         <section className="p-4 sm:p-6">
           <div className="bg-white rounded-lg shadow-md p-4">
             <h3 className="font-semibold mb-4 border-b pb-2 text-red-600">
@@ -519,27 +578,29 @@ export default function Dashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {dashboard.overdueTasks.map((task, index) => (
-                    <tr key={`overdue-${task.title}-${index}`} className="border-b hover:bg-red-50">
-                      <td className="p-2 sm:p-3 font-medium">{task.title}</td>
-                      <td className="p-2 sm:p-3">{task.project}</td>
-                      <td className="p-2 sm:p-3">{task.assignedTo}</td>
-                      <td className="p-2 sm:p-3 text-red-600 font-semibold">
-                        {task.dueDate}
-                      </td>
-                      <td className="p-2 sm:p-3">
-                        <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded text-xs">
-                          {task.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                  {dashboard.overdueTasks
+                    .filter(task => task != null)
+                    .map((task, index) => (
+                      <tr key={`overdue-${task.id || task.title || index}-${index}`} className="border-b hover:bg-red-50">
+                        <td className="p-2 sm:p-3 font-medium">{task.title || "Unknown"}</td>
+                        <td className="p-2 sm:p-3">{task.project || "Unknown"}</td>
+                        <td className="p-2 sm:p-3">{task.assignedTo || "Unassigned"}</td>
+                        <td className="p-2 sm:p-3 text-red-600 font-semibold">
+                          {task.dueDate || "N/A"}
+                        </td>
+                        <td className="p-2 sm:p-3">
+                          <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded text-xs">
+                            {task.status || "Unknown"}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>
           </div>
         </section>
-      )}
+      ) : null}
 
       {/* Empty State */}
       {totalTasks === 0 && (

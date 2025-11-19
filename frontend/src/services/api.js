@@ -1,23 +1,13 @@
 import axios from "axios";
 
-// Set backend URL - use environment variable or fallback to production URL
+// Set backend URL - use environment variable only
 const getBaseURL = () => {
-  // Priority 1: Environment variable (set in Render dashboard)
+  // Use environment variable (required in production)
   if (import.meta.env.VITE_API_URL) {
     return import.meta.env.VITE_API_URL;
   }
   
-  // Priority 2: Production fallback (for deployed frontend)
-  // Check if we're in production (not localhost)
-  const isProduction = typeof window !== 'undefined' && 
-    window.location.hostname !== 'localhost' && 
-    window.location.hostname !== '127.0.0.1';
-  
-  if (isProduction) {
-    return "https://project-management-dashboard-1-le5n.onrender.com/api";
-  }
-  
-  // Priority 3: Development fallback (for local dev)
+  // Development fallback (for local dev only)
   return "/api";
 };
 
