@@ -53,15 +53,17 @@ export const getDashboardData = async (req, res) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0); // Reset time to start of day for comparison
 
-    // Task columns: ID, ProjectID, Title, Description, AssignedTo, DueDate, Status, Attachments
+    // Task columns: ID, ProjectID, Title, Description, AssignedTo, StartDate, EndDate, DueDate, Status, Attachments
     taskRows.forEach((row) => {
       const taskId = row[0] || ""; // ID
       const projectId = row[1] || ""; // ProjectID
       const title = row[2] || ""; // Title
       const description = row[3] || ""; // Description
       const assignedTo = row[4] || ""; // AssignedTo
-      const dueDate = row[5] || ""; // DueDate
-      const status = (row[6] || "Not Started").trim(); // Status
+      const startDate = row[5] || ""; // StartDate
+      const endDate = row[6] || ""; // EndDate
+      const dueDate = row[7] || ""; // DueDate (column 7, not 5)
+      const status = (row[8] || "Not Started").trim(); // Status (column 8, not 6)
 
       // Count status (case-insensitive)
       const statusLower = status.toLowerCase();

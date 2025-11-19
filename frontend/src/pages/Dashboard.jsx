@@ -58,6 +58,10 @@ export default function Dashboard() {
       setLoading(true);
       setError(null);
       const data = await getDashboardData();
+      console.log("📊 Dashboard data received:", data);
+      console.log("📊 Status counts:", data?.statusCounts);
+      console.log("📊 Project completion:", data?.projectCompletion);
+      console.log("📊 Employee workload:", data?.employeeWorkload);
       setDashboard(data);
     } catch (err) {
       console.error("Error loading dashboard data:", err);
@@ -178,6 +182,7 @@ export default function Dashboard() {
 
   // Prepare data for charts - ensure we have valid data with null checks
   const statusCounts = dashboard?.statusCounts || {};
+  console.log("📊 Processing statusCounts:", statusCounts);
   
   // Map status names to requested format: pending, inProgress, completed
   const statusNameMap = {
@@ -186,44 +191,74 @@ export default function Dashboard() {
     "Completed": "completed"
   };
   
-  const statusChartData = Object.entries(statusCounts)
-    .filter(([_, value]) => value != null && value > 0) // Only show statuses with tasks
-    .map(([name, value]) => ({ 
-      name: statusNameMap[name] || name, 
-      value: value || 0 
-    }))
-    .filter(item => item.value > 0); // Final filter to ensure no zero values
+  // Ensure we always show the three main statuses even if count is 0
+  const statusChartData = [
+    { name: "pending", value: statusCounts["Not Started"] || 0 },
+    { name: "inProgress", value: statusCounts["In Progress"] || 0 },
+    { name: "completed", value: statusCounts["Completed"] || 0 },
+    // Include any other statuses that might exist
+    ...Object.entries(statusCounts)
+      .filter(([name, value]) => 
+        name !== "Not Started" && 
+        name !== "In Progress" && 
+        name !== "Completed" && 
+        value != null && value > 0
+      )
+      .map(([name, value]) => ({ 
+        name: statusNameMap[name] || name, 
+        value: value || 0 
+      }))
+  ].filter(item => item.value > 0); // Only show statuses with tasks
+  
+  console.log("📊 Status chart data:", statusChartData);
 
   const projectChartData = (dashboard?.projectCompletion || [])
-    .filter(project => project != null && project.project != null && project.progress != null)
-    .slice(0, 10) // Show top 10 projects
-    .map((project) => ({
-      name: project.project && project.project.length > 15 
-        ? project.project.substring(0, 15) + "..." 
-        : project.project || "Unknown",
-      progress: project.progress || 0,
-      fullName: project.project || "Unknown",
-      completedTasks: project.completedTasks || 0,
-      totalTasks: project.totalTasks || 0,
-    }))
-    .filter(project => project.totalTasks > 0); // Only show projects with tasks
+    .filter(project => project != null && project.project != null)
+    .map((project) => {
+      // Calculate progress if not provided
+      const progress = project.progress != null && project.progress !== undefined
+        ? project.progress 
+        : (project.totalTasks > 0 
+          ? Math.round(((project.completedTasks || 0) / project.totalTasks) * 100) 
+          : 0);
+      return {
+        name: project.project && project.project.length > 15 
+          ? project.project.substring(0, 15) + "..." 
+          : project.project || "Unknown",
+        progress: Math.max(0, Math.min(100, progress)), // Ensure progress is between 0-100
+        fullName: project.project || "Unknown",
+        completedTasks: project.completedTasks || 0,
+        totalTasks: project.totalTasks || 0,
+      };
+    })
+    .filter(project => project.totalTasks > 0) // Only show projects with tasks
+    .sort((a, b) => b.progress - a.progress) // Sort by progress descending
+    .slice(0, 10); // Show top 10 projects
+  
+  console.log("📊 Project chart data:", projectChartData);
 
   const employeeWorkloadData = Object.entries(dashboard?.employeeWorkload || {})
     .filter(([name, value]) => name != null && value != null && value > 0)
-    .slice(0, 10) // Show top 10 employees
     .map(([name, value]) => ({
-      name: name || "Unknown",
+      name: (name || "Unknown").length > 12 
+        ? (name || "Unknown").substring(0, 12) + "..." 
+        : (name || "Unknown"),
       tasks: value || 0,
       fullName: name || "Unknown",
     }))
     .sort((a, b) => (b.tasks || 0) - (a.tasks || 0))
+    .slice(0, 10) // Show top 10 employees after sorting
     .filter(item => item.tasks > 0); // Only show employees with tasks
+  
+  console.log("📊 Employee workload data:", employeeWorkloadData);
 
   const completedTasks = dashboard?.statusCounts?.["Completed"] || dashboard?.statusCounts?.Completed || 0;
   const totalTasks = dashboard?.totalTasks || 0;
   const completionRate = totalTasks > 0 
     ? Math.round((completedTasks / totalTasks) * 100) 
     : 0;
+  
+  console.log("📊 Completion rate:", completionRate, "(", completedTasks, "/", totalTasks, ")");
 
   return (
     <div className="min-h-screen bg-gray-100 text-gray-800">
@@ -453,7 +488,7 @@ export default function Dashboard() {
               Employee Workload (Top 10)
             </h3>
             <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={employeeWorkloadData}>
+              <BarChart data={employeeWorkloadData} margin={{ bottom: 60 }}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis 
                   dataKey="name" 
@@ -461,11 +496,15 @@ export default function Dashboard() {
                   textAnchor="end" 
                   height={100}
                   tick={{ fontSize: 10 }}
+                  interval={0}
                 />
                 <YAxis />
                 <Tooltip
-                  formatter={(value) => `${value || 0} tasks`}
-                  labelFormatter={(label) => `Employee: ${label || "Unknown"}`}
+                  formatter={(value, name, props) => {
+                    const fullName = props.payload?.fullName || props.payload?.name || "Unknown";
+                    return [`${value || 0} tasks`, `Employee: ${fullName}`];
+                  }}
+                  labelFormatter={(label) => `Tasks: ${label || 0}`}
                 />
                 <Bar dataKey="tasks" fill="#8b5cf6" radius={[8, 8, 0, 0]} />
               </BarChart>
@@ -503,7 +542,12 @@ export default function Dashboard() {
                   {dashboard.projectCompletion
                     .filter(project => project != null && project.project != null)
                     .map((project, index) => {
-                      const progress = project.progress != null ? project.progress : 0;
+                      // Calculate progress if not provided
+                      const progress = project.progress != null && project.progress !== undefined
+                        ? project.progress
+                        : (project.totalTasks > 0 
+                          ? Math.round(((project.completedTasks || 0) / project.totalTasks) * 100) 
+                          : 0);
                       const totalTasks = project.totalTasks || 0;
                       const completedTasks = project.completedTasks || 0;
                       return (
