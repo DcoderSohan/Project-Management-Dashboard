@@ -286,6 +286,11 @@ export const checkAdminExists = async (req, res) => {
  */
 export const login = async (req, res) => {
   try {
+    console.log("🔐 Login request received");
+    console.log("   Path:", req.path);
+    console.log("   Method:", req.method);
+    console.log("   Body:", { email: req.body?.email ? "***" : "missing", password: req.body?.password ? "***" : "missing" });
+    
     const { email, password } = req.body;
 
     if (!email || !password) {

@@ -127,8 +127,28 @@ if (existsSync(frontendBuildPath)) {
 //   res.send("Backend server is running successfully!");
 // });
 
-// ✅ Use routes
+// ✅ Add request logging middleware for API routes (before route registration)
+app.use((req, res, next) => {
+  // Only log API requests
+  if (req.path.startsWith("/api")) {
+    console.log(`📡 ${req.method} ${req.path} - ${new Date().toISOString()}`);
+  }
+  next();
+});
+
+// ✅ Use routes - IMPORTANT: Register in correct order
+// CRITICAL: All routes MUST be registered BEFORE the catch-all handler
 try {
+  // Verify authRoutes is imported correctly
+  if (!authRoutes) {
+    throw new Error("authRoutes is not imported or is undefined");
+  }
+  
+  // Register auth routes FIRST (most critical)
+  app.use("/api/auth", authRoutes);
+  console.log("✅ Auth routes registered at /api/auth");
+  
+  // Register other routes
   app.use("/api/projects", projectRoutes);
   app.use("/api/tasks", taskRoutes);
   app.use("/api/users", userRoutes);
@@ -136,22 +156,85 @@ try {
   app.use("/api/upload", uploadRoutes);
   app.use("/api/profile-upload", profileUploadRoutes);
   app.use("/api/access", accessRoutes);
-  app.use("/api/auth", authRoutes);
-  console.log("✅ All API routes registered");
+  
+  console.log("✅ All API routes registered successfully");
+  
+  // Log all registered auth routes for verification
+  console.log("📋 Registered Auth Routes:");
+  console.log("   ✅ POST /api/auth/login");
+  console.log("   ✅ POST /api/auth/signup");
+  console.log("   ✅ GET  /api/auth/check-admin");
+  console.log("   ✅ GET  /api/auth/me (protected)");
+  console.log("   ✅ POST /api/auth/reset-admin");
+  console.log("   ✅ PUT  /api/auth/profile (protected)");
+  console.log("   ✅ GET  /api/auth/users (protected)");
+  console.log("   ✅ GET  /api/auth/sessions (protected)");
+  
+  // Verify route registration by checking Express router stack
+  console.log("🔍 Verifying route registration...");
+  const routes = [];
+  app._router?.stack?.forEach((middleware) => {
+    if (middleware.route) {
+      routes.push(`${Object.keys(middleware.route.methods).join(', ').toUpperCase()} ${middleware.route.path}`);
+    } else if (middleware.name === 'router') {
+      // This is a router middleware
+      const routerPath = middleware.regexp.source.replace('\\/?', '').replace('(?=\\/|$)', '');
+      routes.push(`Router mounted at: ${routerPath}`);
+    }
+  });
+  console.log("📊 Total registered routes/middleware:", routes.length);
+  
 } catch (error) {
-  console.error("❌ Error registering routes:", error);
+  console.error("❌ CRITICAL ERROR: Failed to register routes");
+  console.error("Error message:", error.message);
+  console.error("Error stack:", error.stack);
   throw error;
 }
 
-// Debug: Log all registered routes
-console.log("✅ Auth routes registered at /api/auth");
-console.log("   - GET  /api/auth/check-admin");
-console.log("   - POST /api/auth/signup");
-console.log("   - POST /api/auth/login");
+// ✅ Health check and route verification endpoints
+app.get("/api/health", (req, res) => {
+  res.json({ 
+    status: "ok", 
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || "development"
+  });
+});
 
-// Test auth endpoint
+// Test auth endpoint - verify routes are working
 app.get("/api/auth/test", (req, res) => {
-  res.json({ message: "✅ Auth routes are working!", timestamp: new Date().toISOString() });
+  res.json({ 
+    message: "✅ Auth routes are working!", 
+    timestamp: new Date().toISOString(),
+    routes: {
+      login: "POST /api/auth/login",
+      signup: "POST /api/auth/signup",
+      checkAdmin: "GET /api/auth/check-admin",
+      me: "GET /api/auth/me (protected)"
+    }
+  });
+});
+
+// Route verification endpoint - list all registered routes
+app.get("/api/routes", (req, res) => {
+  res.json({
+    message: "Registered API routes",
+    routes: {
+      auth: [
+        "POST /api/auth/login",
+        "POST /api/auth/signup",
+        "GET /api/auth/check-admin",
+        "GET /api/auth/me (protected)",
+        "POST /api/auth/reset-admin"
+      ],
+      projects: "All routes under /api/projects",
+      tasks: "All routes under /api/tasks",
+      users: "All routes under /api/users",
+      dashboard: "GET /api/dashboard",
+      upload: "All routes under /api/upload",
+      profileUpload: "All routes under /api/profile-upload",
+      access: "All routes under /api/access"
+    }
+  });
 });
 
 // ✅ Test route for Google Sheets
@@ -206,23 +289,33 @@ app.get("/api/test/reminders", async (req, res) => {
 });
 
 // ✅ Catch-all handler: serve React app for all non-API routes
+// CRITICAL: This MUST be the last middleware - placed AFTER all API routes
 // This fixes the 404 error when reloading pages with client-side routing
 // Must be placed AFTER all API routes and static file serving
 // This MUST be the last middleware - it should NEVER call next() to ensure it catches all routes
 app.use((req, res) => {
-  // Skip API routes and uploads - these should have been handled above
-  // IMPORTANT: Check this FIRST before any other logic
-  // This prevents the catch-all from intercepting API requests
+  // CRITICAL: Check for API routes FIRST - if we reach here for an API route,
+  // it means the route wasn't registered or doesn't match
   if (req.path.startsWith("/api") || req.path.startsWith("/uploads")) {
-    // If we reach here, it means the API route wasn't found
-    // This should not happen if routes are registered correctly
-    console.log(`❌ API/Upload route not found: ${req.method} ${req.path}`);
-    console.log(`   This means the route handler was not registered or the path doesn't match`);
+    console.error(`❌ API/Upload route not found: ${req.method} ${req.path}`);
+    console.error(`   Requested path: ${req.path}`);
+    console.error(`   Request method: ${req.method}`);
+    console.error(`   This means:`);
+    console.error(`   1. The route handler was not registered`);
+    console.error(`   2. The route path doesn't match`);
+    console.error(`   3. The route was registered after the catch-all (should not happen)`);
+    
+    // Provide helpful error message
+    if (req.path === "/api/auth/login" || req.path === "/auth/login") {
+      console.error(`   ⚠️  Login route not found! Check if authRoutes is properly imported and registered.`);
+    }
+    
     return res.status(404).json({ 
       error: "API route not found", 
       path: req.path, 
       method: req.method,
-      message: "The requested API endpoint does not exist. Please check the route path."
+      message: `The requested API endpoint '${req.method} ${req.path}' does not exist.`,
+      hint: "Check that the route is registered in server.js before the catch-all handler."
     });
   }
   
@@ -317,6 +410,15 @@ try {
   app.listen(PORT, () => {
     console.log(`✅ Server running on port ${PORT}`);
     console.log(`✅ Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`✅ Server URL: http://localhost:${PORT}`);
+    console.log(`✅ API Base URL: http://localhost:${PORT}/api`);
+    console.log(`✅ Login endpoint: http://localhost:${PORT}/api/auth/login`);
+    console.log(`✅ Health check: http://localhost:${PORT}/api/health`);
+    console.log(`✅ Route verification: http://localhost:${PORT}/api/routes`);
+    
+    // Verify critical routes are accessible
+    console.log("\n🔍 Route Verification:");
+    console.log("   To test login route, run: curl -X POST http://localhost:" + PORT + "/api/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"test\",\"password\":\"test\"}'");
   });
 
   // Handle unhandled promise rejections
