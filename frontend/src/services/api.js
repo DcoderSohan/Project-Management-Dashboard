@@ -1,13 +1,29 @@
 import axios from "axios";
 
-// Set backend URL - use environment variable only
+// Set backend URL - use environment variable or construct from current location
 const getBaseURL = () => {
-  // Use environment variable (required in production)
+  // Priority 1: Use environment variable (required in production)
   if (import.meta.env.VITE_API_URL) {
     return import.meta.env.VITE_API_URL;
   }
   
-  // Development fallback (for local dev only)
+  // Priority 2: In production, try to construct from current origin
+  if (import.meta.env.PROD && typeof window !== 'undefined') {
+    // If frontend and backend are on same domain, use relative path
+    // Otherwise, we need the full URL (which should be set via VITE_API_URL)
+    const origin = window.location.origin;
+    // Check if we're on Render or similar hosting
+    if (origin.includes('onrender.com') || origin.includes('vercel.app') || origin.includes('netlify.app')) {
+      // For same-domain deployments, use relative path
+      return "/api";
+    }
+    // For other cases, try to use origin + /api
+    // But warn that VITE_API_URL should be set
+    console.warn("⚠️ VITE_API_URL not set in production. Using fallback:", origin + "/api");
+    return origin + "/api";
+  }
+  
+  // Priority 3: Development fallback (for local dev only)
   return "/api";
 };
 
@@ -38,9 +54,18 @@ api.interceptors.request.use(
   }
 );
 
-// Handle 401 errors (unauthorized)
+// Handle responses - check for HTML responses (catch-all route interference)
 api.interceptors.response.use(
   (response) => {
+    // Check if response is HTML (means catch-all route intercepted it)
+    const contentType = response.headers['content-type'] || '';
+    if (contentType.includes('text/html') && typeof response.data === 'string') {
+      console.error("❌ Received HTML response instead of JSON. API route may not be found.");
+      console.error("Response preview:", response.data.substring(0, 200));
+      console.error("Request URL:", response.config?.baseURL + response.config?.url);
+      throw new Error("API endpoint not found. The request was intercepted by the frontend route. Please check VITE_API_URL environment variable.");
+    }
+    
     // Log successful responses in development
     if (import.meta.env.DEV) {
       console.log("✅ API Response:", response.config?.url, response.status);

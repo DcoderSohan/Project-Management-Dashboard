@@ -212,17 +212,32 @@ app.get("/api/test/reminders", async (req, res) => {
 app.use((req, res) => {
   // Skip API routes and uploads - these should have been handled above
   // IMPORTANT: Check this FIRST before any other logic
+  // This prevents the catch-all from intercepting API requests
   if (req.path.startsWith("/api") || req.path.startsWith("/uploads")) {
+    // If we reach here, it means the API route wasn't found
+    // This should not happen if routes are registered correctly
     console.log(`❌ API/Upload route not found: ${req.method} ${req.path}`);
-    return res.status(404).json({ error: "Route not found", path: req.path, method: req.method });
+    console.log(`   This means the route handler was not registered or the path doesn't match`);
+    return res.status(404).json({ 
+      error: "API route not found", 
+      path: req.path, 
+      method: req.method,
+      message: "The requested API endpoint does not exist. Please check the route path."
+    });
   }
   
   console.log(`🔍 Catch-all route hit: ${req.method} ${req.path}`);
   
   // Handle GET and HEAD requests (HEAD is used by Render for health checks)
+  // All other methods (POST, PUT, DELETE, etc.) should have been handled by API routes above
   if (req.method !== "GET" && req.method !== "HEAD") {
     console.log(`❌ Method not allowed for catch-all: ${req.method} ${req.path}`);
-    return res.status(404).json({ error: "Method not allowed", path: req.path, method: req.method });
+    return res.status(404).json({ 
+      error: "Method not allowed", 
+      path: req.path, 
+      method: req.method,
+      message: "This route only accepts GET and HEAD requests. API routes should be accessed via /api/*"
+    });
   }
   
   // For HEAD requests, just return 200 OK (health check)

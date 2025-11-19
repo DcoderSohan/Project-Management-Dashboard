@@ -29,7 +29,17 @@ export const authService = {
       if (typeof responseData === 'string') {
         console.error("❌ Received HTML/string response instead of JSON. This usually means the API route was not found.");
         console.error("Response preview:", responseData.substring(0, 200));
-        throw new Error("API endpoint not found. Please check VITE_API_URL environment variable.");
+        console.error("Request URL:", res.config?.baseURL + res.config?.url);
+        console.error("VITE_API_URL:", import.meta.env.VITE_API_URL || "NOT SET");
+        
+        // Provide more helpful error message
+        let errorMsg = "API endpoint not found. ";
+        if (!import.meta.env.VITE_API_URL && import.meta.env.PROD) {
+          errorMsg += "VITE_API_URL environment variable is not set in production. Please configure it in your deployment settings.";
+        } else {
+          errorMsg += "The request may be hitting the wrong URL. Please check VITE_API_URL environment variable.";
+        }
+        throw new Error(errorMsg);
       }
       
       // Validate response structure
