@@ -7,4 +7,9 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      # Optional: Set VITE_API_URL if frontend and backend are on different domains
+      # If both are served from the same service (like this setup), you can leave it unset
+      # The app will automatically use /api as a relative path
+      # - key: VITE_API_URL
+      #   value: https://your-backend-url.onrender.com/api
 

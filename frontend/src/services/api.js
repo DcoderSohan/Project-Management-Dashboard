@@ -9,21 +9,27 @@ const getBaseURL = () => {
   
   // Priority 2: In production, try to construct from current origin
   if (import.meta.env.PROD && typeof window !== 'undefined') {
-    // If frontend and backend are on same domain, use relative path
-    // Otherwise, we need the full URL (which should be set via VITE_API_URL)
     const origin = window.location.origin;
-    // Check if we're on Render or similar hosting
+    
+    // If frontend and backend are on same domain (common on Render), use relative path
+    // This works when both frontend and backend are served from the same service
     if (origin.includes('onrender.com') || origin.includes('vercel.app') || origin.includes('netlify.app')) {
       // For same-domain deployments, use relative path
+      // The backend serves the frontend, so /api will work
+      console.log("🔗 Using relative /api path (same-domain deployment detected)");
       return "/api";
     }
-    // For other cases, try to use origin + /api
-    // But warn that VITE_API_URL should be set
-    console.warn("⚠️ VITE_API_URL not set in production. Using fallback:", origin + "/api");
-    return origin + "/api";
+    
+    // For other cases, try to use origin + /api as fallback
+    // This assumes backend is on same domain but different path
+    const fallbackURL = origin + "/api";
+    console.warn("⚠️ VITE_API_URL not set in production. Using fallback:", fallbackURL);
+    console.warn("⚠️ For best results, set VITE_API_URL environment variable in your deployment settings");
+    return fallbackURL;
   }
   
   // Priority 3: Development fallback (for local dev only)
+  // Vite proxy will handle /api -> http://localhost:5000/api
   return "/api";
 };
 
