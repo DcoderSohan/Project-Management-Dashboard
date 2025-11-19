@@ -23,25 +23,37 @@ export const authService = {
       console.log("📡 Login response headers:", res.headers);
       console.log("📡 Login response data:", res.data);
       console.log("📡 Login response data type:", typeof res.data);
-      console.log("📡 Login response data keys:", res.data ? Object.keys(res.data) : "null");
+      
+      // Handle case where response might be a string (HTML from catch-all route)
+      let responseData = res.data;
+      if (typeof responseData === 'string') {
+        console.error("❌ Received HTML/string response instead of JSON. This usually means the API route was not found.");
+        console.error("Response preview:", responseData.substring(0, 200));
+        throw new Error("API endpoint not found. Please check VITE_API_URL environment variable.");
+      }
       
       // Validate response structure
-      if (!res.data) {
-        console.error("❌ Response data is null or undefined");
+      if (!responseData || (typeof responseData === 'object' && Object.keys(responseData).length === 0)) {
+        console.error("❌ Response data is null, undefined, or empty");
         throw new Error("Invalid response: No data received from server");
       }
       
       // Check if response contains error
-      if (res.data.error && !res.data.token) {
-        console.error("❌ Error in response:", res.data.error);
-        throw new Error(res.data.error);
+      if (responseData.error && !responseData.token) {
+        console.error("❌ Error in response:", responseData.error);
+        throw new Error(responseData.error);
       }
       
-      return res.data;
+      return responseData;
     } catch (error) {
       console.error("❌ Login request failed:", error);
       console.error("❌ Error response:", error.response?.data);
       console.error("❌ Error status:", error.response?.status);
+      console.error("❌ Error config:", {
+        url: error.config?.url,
+        baseURL: error.config?.baseURL,
+        method: error.config?.method
+      });
       // Re-throw to let AuthContext handle it
       throw error;
     }
@@ -50,14 +62,28 @@ export const authService = {
   // Get current user
   async getCurrentUser(token) {
     try {
+      // Token is already added by interceptor, but we can pass it explicitly too
       const res = await api.get("/auth/me", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
-      return res.data.user;
+      
+      // Handle case where response might be a string (HTML from catch-all route)
+      if (typeof res.data === 'string') {
+        console.error("❌ Received HTML/string response instead of JSON for /auth/me");
+        throw new Error("API endpoint not found. Please check VITE_API_URL environment variable.");
+      }
+      
+      return res.data?.user || res.data;
     } catch (error) {
       console.error("Error getting current user:", error);
+      console.error("Error details:", {
+        status: error.response?.status,
+        data: error.response?.data,
+        url: error.config?.url,
+        baseURL: error.config?.baseURL
+      });
       throw error;
     }
   },

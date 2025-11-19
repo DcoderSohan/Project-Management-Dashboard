@@ -210,23 +210,24 @@ app.get("/api/test/reminders", async (req, res) => {
 // Must be placed AFTER all API routes and static file serving
 // This MUST be the last middleware - it should NEVER call next() to ensure it catches all routes
 app.use((req, res) => {
+  // Skip API routes and uploads - these should have been handled above
+  // IMPORTANT: Check this FIRST before any other logic
+  if (req.path.startsWith("/api") || req.path.startsWith("/uploads")) {
+    console.log(`❌ API/Upload route not found: ${req.method} ${req.path}`);
+    return res.status(404).json({ error: "Route not found", path: req.path, method: req.method });
+  }
+  
   console.log(`🔍 Catch-all route hit: ${req.method} ${req.path}`);
   
   // Handle GET and HEAD requests (HEAD is used by Render for health checks)
   if (req.method !== "GET" && req.method !== "HEAD") {
-    console.log(`❌ Method not allowed: ${req.method}`);
-    return res.status(404).json({ error: "Method not allowed" });
+    console.log(`❌ Method not allowed for catch-all: ${req.method} ${req.path}`);
+    return res.status(404).json({ error: "Method not allowed", path: req.path, method: req.method });
   }
   
   // For HEAD requests, just return 200 OK (health check)
   if (req.method === "HEAD") {
     return res.status(200).end();
-  }
-  
-  // Skip API routes and uploads - these should have been handled above
-  if (req.path.startsWith("/api") || req.path.startsWith("/uploads")) {
-    console.log(`❌ API/Upload route not found: ${req.path}`);
-    return res.status(404).json({ error: "Route not found" });
   }
   
   // For ALL GET requests that are not API/uploads and not static files, serve index.html
