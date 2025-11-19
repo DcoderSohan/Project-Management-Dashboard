@@ -21,6 +21,12 @@ function App() {
         <Route path="/signup" element={<SignUp />} />
         <Route path="/login" element={<Login />} />
         
+        {/* Public shared project route - accessible without login via share link */}
+        <Route
+          path="/projects/shared/:token"
+          element={<Projects />}
+        />
+        
         {/* Protected routes (accessible to all authenticated users) */}
         <Route
           path="/"
@@ -32,14 +38,6 @@ function App() {
         />
         <Route
           path="/projects"
-          element={
-            <ProtectedRoute>
-              <Projects />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/projects/shared/:token"
           element={
             <ProtectedRoute>
               <Projects />
