@@ -144,9 +144,12 @@ try {
     throw new Error("authRoutes is not imported or is undefined");
   }
   
-  // Register auth routes FIRST (most critical)
+  // CRITICAL: Register auth routes FIRST (most critical)
+  // Use explicit path matching to ensure routes are registered
   app.use("/api/auth", authRoutes);
   console.log("✅ Auth routes registered at /api/auth");
+  console.log("   Router type:", typeof authRoutes);
+  console.log("   Router is function:", typeof authRoutes === 'function');
   
   // Register other routes
   app.use("/api/projects", projectRoutes);
@@ -200,6 +203,7 @@ app.get("/api/health", (req, res) => {
   });
 });
 
+// ✅ CRITICAL: Register test endpoints BEFORE catch-all to verify routes
 // Test auth endpoint - verify routes are working
 app.get("/api/auth/test", (req, res) => {
   res.json({ 
@@ -210,7 +214,20 @@ app.get("/api/auth/test", (req, res) => {
       signup: "POST /api/auth/signup",
       checkAdmin: "GET /api/auth/check-admin",
       me: "GET /api/auth/me (protected)"
-    }
+    },
+    serverTime: new Date().toISOString(),
+    environment: process.env.NODE_ENV || "development"
+  });
+});
+
+// ✅ Direct login endpoint test (bypasses router to verify server is working)
+app.post("/api/auth/login-test", (req, res) => {
+  console.log("🔍 Login test endpoint hit - this verifies the server is receiving POST requests");
+  res.status(200).json({ 
+    message: "✅ Server is receiving POST requests to /api/auth/login-test",
+    body: req.body,
+    timestamp: new Date().toISOString(),
+    note: "This is a test endpoint. The actual login route should be at /api/auth/login"
   });
 });
 
@@ -296,26 +313,44 @@ app.get("/api/test/reminders", async (req, res) => {
 app.use((req, res) => {
   // CRITICAL: Check for API routes FIRST - if we reach here for an API route,
   // it means the route wasn't registered or doesn't match
-  if (req.path.startsWith("/api") || req.path.startsWith("/uploads")) {
+  const isApiRoute = req.path.startsWith("/api") || req.path.startsWith("/uploads");
+  
+  if (isApiRoute) {
     console.error(`❌ API/Upload route not found: ${req.method} ${req.path}`);
     console.error(`   Requested path: ${req.path}`);
     console.error(`   Request method: ${req.method}`);
+    console.error(`   Request URL: ${req.url}`);
+    console.error(`   Original URL: ${req.originalUrl}`);
+    console.error(`   Base URL: ${req.baseUrl}`);
     console.error(`   This means:`);
     console.error(`   1. The route handler was not registered`);
     console.error(`   2. The route path doesn't match`);
     console.error(`   3. The route was registered after the catch-all (should not happen)`);
+    console.error(`   4. The request might be hitting a different server instance`);
     
     // Provide helpful error message
-    if (req.path === "/api/auth/login" || req.path === "/auth/login") {
-      console.error(`   ⚠️  Login route not found! Check if authRoutes is properly imported and registered.`);
+    if (req.path === "/api/auth/login" || req.path === "/auth/login" || req.url === "/api/auth/login") {
+      console.error(`   ⚠️  LOGIN ROUTE NOT FOUND!`);
+      console.error(`   ⚠️  This is a critical error - login functionality will not work`);
+      console.error(`   ⚠️  Check:`);
+      console.error(`      1. Is authRoutes imported correctly?`);
+      console.error(`      2. Is app.use("/api/auth", authRoutes) called?`);
+      console.error(`      3. Is the server restarted after code changes?`);
+      console.error(`      4. Check server logs for route registration messages`);
     }
     
     return res.status(404).json({ 
       error: "API route not found", 
-      path: req.path, 
+      path: req.path,
+      url: req.url,
       method: req.method,
       message: `The requested API endpoint '${req.method} ${req.path}' does not exist.`,
-      hint: "Check that the route is registered in server.js before the catch-all handler."
+      hint: "Check that the route is registered in server.js before the catch-all handler.",
+      troubleshooting: {
+        loginRoute: req.path.includes("login") ? "Login route not found. Check server logs for route registration." : null,
+        checkServerLogs: "Look for '✅ Auth routes registered at /api/auth' in server startup logs",
+        verifyRoute: "Test with: GET /api/auth/test or POST /api/auth/login-test"
+      }
     });
   }
   
