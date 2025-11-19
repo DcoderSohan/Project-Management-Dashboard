@@ -109,7 +109,7 @@ export const shareProject = async (req, res) => {
 
       // Send notification email
       try {
-        const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+        const frontendUrl = getFrontendUrl(req);
         const projectLink = `${frontendUrl}/projects?shared=true&email=${encodeURIComponent(sharedWith)}`;
         
         const emailSubject = `📁 Project Shared: ${projectName}`;
@@ -169,7 +169,7 @@ Project Management System`;
 
     // Send notification email
     try {
-      const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+      const frontendUrl = getFrontendUrl(req);
       const projectLink = `${frontendUrl}/projects?shared=true&email=${encodeURIComponent(sharedWith)}`;
       
       const emailSubject = `📁 Project Shared: ${projectName}`;
@@ -215,6 +215,38 @@ Project Management System`;
 };
 
 /**
+ * Get frontend URL for share links
+ * Priority: FRONTEND_URL env var > Request origin > Deployed URL > localhost
+ */
+const getFrontendUrl = (req) => {
+  // Priority 1: Use environment variable (explicitly set)
+  if (process.env.FRONTEND_URL) {
+    return process.env.FRONTEND_URL;
+  }
+  
+  // Priority 2: Try to get from request origin (for same-domain deployments)
+  if (req && req.headers && req.headers.origin) {
+    const origin = req.headers.origin;
+    // If origin is from Render, use it
+    if (origin.includes('onrender.com') || origin.includes('vercel.app') || origin.includes('netlify.app')) {
+      console.log(`🔗 Using frontend URL from request origin: ${origin}`);
+      return origin;
+    }
+  }
+  
+  // Priority 3: Use deployed frontend URL (if known)
+  // Update this if your frontend is deployed to a different URL
+  const deployedFrontendUrl = "https://project-management-dashboard-frontend-2.onrender.com";
+  if (process.env.NODE_ENV === 'production') {
+    console.log(`🔗 Using deployed frontend URL: ${deployedFrontendUrl}`);
+    return deployedFrontendUrl;
+  }
+  
+  // Priority 4: Development fallback
+  return "http://localhost:5173";
+};
+
+/**
  * Generate shareable link for a project
  * POST /api/access/generate-link
  */
@@ -250,7 +282,12 @@ export const generateShareLink = async (req, res) => {
     await appendRow(SHEET_NAME, accessToRow(shareData));
 
     // Generate shareable link (frontend URL + token)
-    const shareLink = `${process.env.FRONTEND_URL || "http://localhost:5173"}/projects/shared/${shareToken}`;
+    const frontendUrl = getFrontendUrl(req);
+    const shareLink = `${frontendUrl}/projects/shared/${shareToken}`;
+    
+    console.log(`🔗 Generated share link: ${shareLink}`);
+    console.log(`   Frontend URL: ${frontendUrl}`);
+    console.log(`   Share token: ${shareToken}`);
 
     return res.status(201).json({
       message: "✅ Shareable link generated",

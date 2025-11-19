@@ -51,6 +51,9 @@ The backend uses the following environment variables (set in your backend servic
 
 - `PORT` - Server port (default: 5000, Render sets this automatically)
 - `NODE_ENV` - Environment mode (production/development)
+- `FRONTEND_URL` - (Optional) Frontend URL for share links. If not set, the system will automatically detect it from the request origin or use the deployed URL.
+  - Example: `https://project-management-dashboard-frontend-2.onrender.com`
+  - **Note:** The system will automatically use the deployed frontend URL in production if this is not set.
 - Google Sheets API credentials (see GOOGLE_SHEETS_SETUP.md)
 - Other service-specific variables
 
