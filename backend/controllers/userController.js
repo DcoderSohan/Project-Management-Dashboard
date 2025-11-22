@@ -78,13 +78,20 @@ export const createUser = async (req, res) => {
 export const getAllUsers = async (req, res) => {
   try {
     const { rows } = await readSheetValues(SHEET_NAME);
-    if (!rows || rows.length === 0) return res.status(200).json([]);
+    if (!rows || rows.length === 0) {
+      return res.status(200).json([]);
+    }
 
-    const users = rows.map((r) => rowToUser(r));
+    const users = (rows || []).map((r) => {
+      if (!r || !r[0]) return null; // Skip invalid rows
+      return rowToUser(r);
+    }).filter(u => u !== null); // Remove null entries
+
     return res.status(200).json(users);
   } catch (error) {
     console.error("❌ Error fetching users:", error.message);
-    res.status(500).json({ error: error.message });
+    console.error("Error stack:", error.stack);
+    return res.status(500).json({ error: error.message });
   }
 };
 
@@ -92,13 +99,23 @@ export const getAllUsers = async (req, res) => {
 export const updateUser = async (req, res) => {
   try {
     const { id } = req.params;
+    if (!id) {
+      return res.status(400).json({ error: "User ID is required" });
+    }
+
     const update = req.body;
 
     const { rows } = await readSheetValues(SHEET_NAME);
-    const index = (rows || []).findIndex((r) => r[0] === id);
-
-    if (index === -1)
+    
+    if (!rows || rows.length === 0) {
       return res.status(404).json({ error: "User not found" });
+    }
+
+    const index = (rows || []).findIndex((r) => r && r[0] === id);
+
+    if (index === -1) {
+      return res.status(404).json({ error: "User not found" });
+    }
 
     const existing = rowToUser(rows[index]);
     // merge updates

@@ -107,9 +107,10 @@ export async function recalcProjectProgress(projectId) {
   // - If some tasks completed or any task in progress: "In Progress"
   // - If no tasks or all not started: "Not Started"
   let updatedStatus = "Not Started";
+  let finalProgress = progress; // Use let for progress to allow reassignment
   if (wasCompleted && total > 0) {
     updatedStatus = "Completed";
-    progress = 100; // Ensure progress is 100 when all tasks completed
+    finalProgress = 100; // Ensure progress is 100 when all tasks completed
   } else if (total > 0) {
     // Check if any task is in progress or completed
     const inProgressTasks = projectTasks.filter(
@@ -133,7 +134,7 @@ export async function recalcProjectProgress(projectId) {
     projRow[4] || "", // StartDate
     projRow[5] || "", // EndDate
     updatedStatus, // Status
-    progress.toString(), // Progress (string for sheet)
+    finalProgress.toString(), // Progress (string for sheet)
   ];
 
   // rowNumber in sheet = 1 (header) + projectIndex + 1
@@ -231,13 +232,24 @@ export const getAllTasks = async (req, res) => {
   try {
     const projectIdFilter = req.query.projectId;
     const { rows } = await readSheetValues(SHEET_NAME);
-    const tasks = (rows || []).map((r) => rowToTask(r));
+    
+    if (!rows || rows.length === 0) {
+      return res.status(200).json([]);
+    }
+
+    const tasks = (rows || []).map((r) => {
+      if (!r || !r[0]) return null; // Skip invalid rows
+      return rowToTask(r);
+    }).filter(t => t !== null); // Remove null entries
+
     const result = projectIdFilter
       ? tasks.filter((t) => t.projectId === projectIdFilter)
       : tasks;
+    
     return res.status(200).json(result);
   } catch (err) {
     console.error("getAllTasks error:", err.message);
+    console.error("Error stack:", err.stack);
     return res.status(500).json({ error: err.message });
   }
 };
@@ -246,13 +258,26 @@ export const getAllTasks = async (req, res) => {
 export const getTaskById = async (req, res) => {
   try {
     const id = req.params.id;
+    if (!id) {
+      return res.status(400).json({ error: "Task ID is required" });
+    }
+
     const { rows } = await readSheetValues(SHEET_NAME);
-    const index = (rows || []).findIndex((r) => r[0] === id);
-    if (index === -1) return res.status(404).json({ error: "Task not found" });
+    
+    if (!rows || rows.length === 0) {
+      return res.status(404).json({ error: "Task not found" });
+    }
+
+    const index = (rows || []).findIndex((r) => r && r[0] === id);
+    if (index === -1) {
+      return res.status(404).json({ error: "Task not found" });
+    }
+    
     const task = rowToTask(rows[index]);
     return res.status(200).json(task);
   } catch (err) {
     console.error("getTaskById error:", err.message);
+    console.error("Error stack:", err.stack);
     return res.status(500).json({ error: err.message });
   }
 };

@@ -95,12 +95,19 @@ export const createProject = async (req, res) => {
 export const getAllProjects = async (req, res) => {
   try {
     const { headers, rows } = await readSheetValues(SHEET_NAME);
-    if (!rows || rows.length === 0) return res.status(200).json([]);
+    if (!rows || rows.length === 0) {
+      return res.status(200).json([]);
+    }
 
-    const projects = rows.map((r) => rowToProject(r));
+    const projects = (rows || []).map((r) => {
+      if (!r || !r[0]) return null; // Skip invalid rows
+      return rowToProject(r);
+    }).filter(p => p !== null); // Remove null entries
+
     return res.status(200).json(projects);
   } catch (err) {
     console.error("getAllProjects error:", err.message);
+    console.error("Error stack:", err.stack);
     return res.status(500).json({ error: err.message });
   }
 };
@@ -109,16 +116,26 @@ export const getAllProjects = async (req, res) => {
 export const getProjectById = async (req, res) => {
   try {
     const id = req.params.id;
-    const { rows } = await readSheetValues(SHEET_NAME);
+    if (!id) {
+      return res.status(400).json({ error: "Project ID is required" });
+    }
 
-    const index = rows.findIndex((r) => r[0] === id); // ID is column A (index 0)
-    if (index === -1)
+    const { rows } = await readSheetValues(SHEET_NAME);
+    
+    if (!rows || rows.length === 0) {
       return res.status(404).json({ error: "Project not found" });
+    }
+
+    const index = (rows || []).findIndex((r) => r && r[0] === id); // ID is column A (index 0)
+    if (index === -1) {
+      return res.status(404).json({ error: "Project not found" });
+    }
 
     const project = rowToProject(rows[index]);
     return res.status(200).json(project);
   } catch (err) {
     console.error("getProjectById error:", err.message);
+    console.error("Error stack:", err.stack);
     return res.status(500).json({ error: err.message });
   }
 };
