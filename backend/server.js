@@ -25,11 +25,16 @@ import fileManagementRoutes from "./routes/fileManagementRoutes.js";
 // Use dynamic import to handle errors gracefully
 import("./automation/reminderJob.js")
   .then(() => {
-    console.log("✅ Reminder job module loaded");
+    if (process.env.NODE_ENV === 'development') {
+      console.log("✅ Reminder job module loaded");
+    }
   })
   .catch((error) => {
-    console.warn("⚠️ Warning: Could not load reminder job module:", error.message);
-    console.warn("   Reminder functionality may not work, but server will continue");
+    // Only warn in development
+    if (process.env.NODE_ENV === 'development') {
+      console.warn("⚠️ Warning: Could not load reminder job module:", error.message);
+      console.warn("   Reminder functionality may not work, but server will continue");
+    }
   });
 
 //2. Initialize environment variables
@@ -40,7 +45,9 @@ if (process.env.NODE_ENV !== 'production') {
 
 //3. Create an express app
 const app = express();
-console.log("✅ Express app created");
+if (process.env.NODE_ENV === 'development') {
+  console.log("✅ Express app created");
+}
 
 // Get directory path for static files
 const __filename = fileURLToPath(import.meta.url);
@@ -548,7 +555,10 @@ app.use((req, res) => {
     // This allows React Router to handle client-side routing
     if (existsSync(frontendIndexPath)) {
       const resolvedPath = path.resolve(frontendIndexPath);
-      console.log(`✅ Serving index.html for client-side route: ${req.path}`);
+      // Only log in development
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`✅ Serving index.html for client-side route: ${req.path}`);
+      }
       // Set proper headers to prevent caching issues
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -609,52 +619,54 @@ const PORT = process.env.PORT || 5000;
 //7. Start the server with error handling and route verification
 try {
   const server = app.listen(PORT, () => {
-    console.log(`\n${'='.repeat(60)}`);
-    console.log(`✅ SERVER STARTED SUCCESSFULLY`);
-    console.log(`${'='.repeat(60)}`);
-    console.log(`✅ Server running on port ${PORT}`);
-    console.log(`✅ Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`✅ Server URL: http://localhost:${PORT}`);
-    console.log(`✅ API Base URL: http://localhost:${PORT}/api`);
-    console.log(`\n📡 Critical Endpoints:`);
-    console.log(`   ✅ Login: POST http://localhost:${PORT}/api/auth/login`);
-    console.log(`   ✅ Health: GET http://localhost:${PORT}/api/health`);
-    console.log(`   ✅ Routes: GET http://localhost:${PORT}/api/routes`);
-    console.log(`   ✅ Auth Test: GET http://localhost:${PORT}/api/auth/test`);
-    
-    // ✅ PERMANENT FIX: Verify routes are actually working after server starts
-    console.log(`\n🔍 Performing post-startup route verification...`);
-    
-    // Use a small delay to ensure server is fully ready
-    setTimeout(() => {
-      // Check if route exists by testing the router
-      let routeFound = false;
-      if (app._router && app._router.stack) {
-        for (const middleware of app._router.stack) {
-          if (middleware.name === 'router' && middleware.regexp) {
-            const regex = middleware.regexp;
-            if (regex.test('/api/auth/login') || regex.test('/api/auth')) {
-              routeFound = true;
-              break;
+    // Only show detailed startup logs in development
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`\n${'='.repeat(60)}`);
+      console.log(`✅ SERVER STARTED SUCCESSFULLY`);
+      console.log(`${'='.repeat(60)}`);
+      console.log(`✅ Server running on port ${PORT}`);
+      console.log(`✅ Environment: development`);
+      console.log(`✅ Server URL: http://localhost:${PORT}`);
+      console.log(`✅ API Base URL: http://localhost:${PORT}/api`);
+      console.log(`\n📡 Critical Endpoints:`);
+      console.log(`   ✅ Login: POST http://localhost:${PORT}/api/auth/login`);
+      console.log(`   ✅ Health: GET http://localhost:${PORT}/api/health`);
+      console.log(`   ✅ Routes: GET http://localhost:${PORT}/api/routes`);
+      console.log(`   ✅ Auth Test: GET http://localhost:${PORT}/api/auth/test`);
+      
+      // ✅ PERMANENT FIX: Verify routes are actually working after server starts
+      console.log(`\n🔍 Performing post-startup route verification...`);
+      
+      // Use a small delay to ensure server is fully ready
+      setTimeout(() => {
+        // Check if route exists by testing the router
+        let routeFound = false;
+        if (app._router && app._router.stack) {
+          for (const middleware of app._router.stack) {
+            if (middleware.name === 'router' && middleware.regexp) {
+              const regex = middleware.regexp;
+              if (regex.test('/api/auth/login') || regex.test('/api/auth')) {
+                routeFound = true;
+                break;
+              }
             }
           }
         }
-      }
-      
-      if (routeFound) {
-        console.log(`   ✅ Route verification: Auth routes are registered`);
-      } else {
-        // This is a known false positive - Express router structure makes it hard to verify
-        // Routes are actually registered correctly, this is just a limitation of the check
-        if (process.env.NODE_ENV === 'development') {
+        
+        if (routeFound) {
+          console.log(`   ✅ Route verification: Auth routes are registered`);
+        } else {
           console.log(`   ℹ️  Route verification: Could not confirm auth routes in stack (this is normal)`);
         }
-      }
-      
-      console.log(`\n${'='.repeat(60)}`);
-      console.log(`✅ Server is ready to accept requests`);
-      console.log(`${'='.repeat(60)}\n`);
-    }, 100);
+        
+        console.log(`\n${'='.repeat(60)}`);
+        console.log(`✅ Server is ready to accept requests`);
+        console.log(`${'='.repeat(60)}\n`);
+      }, 100);
+    } else {
+      // Minimal production logs
+      console.log(`✅ Server started on port ${PORT}`);
+    }
   });
   
   // Store server reference for graceful shutdown
