@@ -1,6 +1,6 @@
 import nodemailer from "nodemailer";
 import dotenv from "dotenv";
-dotenv.config();
+dotenv.config({ quiet: true }); // Suppress dotenv tips
 
 // Only create transporter if email credentials are provided
 let transporter = null;

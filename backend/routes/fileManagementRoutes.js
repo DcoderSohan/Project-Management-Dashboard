@@ -9,7 +9,7 @@ import dotenv from "dotenv";
 import { verifyToken } from "../controllers/authController.js";
 import { readSheetValues } from "../services/googleSheetService.js";
 
-dotenv.config();
+dotenv.config({ quiet: true }); // Suppress dotenv tips
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

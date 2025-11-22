@@ -33,8 +33,10 @@ import("./automation/reminderJob.js")
   });
 
 //2. Initialize environment variables
-dotenv.config();
-console.log("✅ Environment variables loaded");
+dotenv.config({ quiet: true }); // Suppress dotenv tips/warnings
+if (process.env.NODE_ENV !== 'production') {
+  console.log("✅ Environment variables loaded");
+}
 
 //3. Create an express app
 const app = express();

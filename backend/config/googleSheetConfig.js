@@ -7,7 +7,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 // Load environment variables (for Sheet ID, etc.)
-dotenv.config();
+dotenv.config({ quiet: true }); // Suppress dotenv tips
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
