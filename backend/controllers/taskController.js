@@ -103,23 +103,20 @@ export async function recalcProjectProgress(projectId) {
   const previousStatus = (projRow[6] || "").toLowerCase();
   const wasCompleted = completed === total && total !== 0;
   
-  // Determine status based on task completion:
+  // Determine status based on task completion (AUTOMATIC - no manual updates):
   // - If all tasks completed: "Completed"
-  // - If some tasks completed: "In Progress"
+  // - If some tasks completed or any task in progress: "In Progress"
   // - If no tasks or all not started: "Not Started"
   let updatedStatus = "Not Started";
   if (wasCompleted && total > 0) {
     updatedStatus = "Completed";
-  } else if (completed > 0 && completed < total) {
-    updatedStatus = "In Progress";
-  } else if (total === 0) {
-    updatedStatus = "Not Started";
-  } else {
-    // Check if any task is in progress
+    progress = 100; // Ensure progress is 100 when all tasks completed
+  } else if (total > 0) {
+    // Check if any task is in progress or completed
     const inProgressTasks = projectTasks.filter(
       (r) => (r[8] || "").toLowerCase() === "in progress"
     ).length;
-    if (inProgressTasks > 0) {
+    if (completed > 0 || inProgressTasks > 0) {
       updatedStatus = "In Progress";
     } else {
       updatedStatus = "Not Started";
