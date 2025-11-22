@@ -87,14 +87,9 @@ export const getDashboardData = async (req, res) => {
       const status = (row[8] || "Not Started").trim(); // Status (column 8, not 6)
       const parentTaskId = row[10] || ""; // ParentTaskID (column 10)
       
-      // Skip subtasks in project progress calculation - only count main tasks
-      if (parentTaskId) {
-        // This is a subtask, skip it for project progress but count for status counts
-        // Status counts should include all tasks (main + subtasks)
-      } else {
-
-      // Count status (case-insensitive)
       const statusLower = status.toLowerCase();
+      
+      // Count status for ALL tasks (main + subtasks) - status counts include everything
       if (statusLower === "not started") {
         statusCounts["Not Started"]++;
       } else if (statusLower === "in progress") {
@@ -107,20 +102,19 @@ export const getDashboardData = async (req, res) => {
         statusCounts[status]++;
       }
 
-        // Track project progress by projectId (only for main tasks, not subtasks)
-        if (projectId) {
-          if (!projectProgress[projectId]) {
-            projectProgress[projectId] = {
-              projectId: projectId,
-              name: projectMap[projectId] || projectId,
-              total: 0,
-              completed: 0,
-            };
-          }
-          projectProgress[projectId].total++;
-          if (statusLower === "completed") {
-            projectProgress[projectId].completed++;
-          }
+      // Track project progress by projectId (only for main tasks, not subtasks)
+      if (!parentTaskId && projectId) {
+        if (!projectProgress[projectId]) {
+          projectProgress[projectId] = {
+            projectId: projectId,
+            name: projectMap[projectId] || projectId,
+            total: 0,
+            completed: 0,
+          };
+        }
+        projectProgress[projectId].total++;
+        if (statusLower === "completed") {
+          projectProgress[projectId].completed++;
         }
       }
 
