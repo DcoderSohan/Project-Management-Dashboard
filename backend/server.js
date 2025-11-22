@@ -94,11 +94,13 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 const frontendBuildPath = path.join(__dirname, "..", "frontend", "dist");
 const frontendIndexPath = path.join(frontendBuildPath, "index.html");
 
-// Log build path for debugging
-console.log(`📁 Checking frontend build at: ${frontendBuildPath}`);
-console.log(`📁 Absolute path: ${path.resolve(frontendBuildPath)}`);
-console.log(`📁 Build exists: ${existsSync(frontendBuildPath)}`);
-console.log(`📁 Index.html exists: ${existsSync(frontendIndexPath)}`);
+// Log build path for debugging (only in development)
+if (process.env.NODE_ENV === 'development') {
+  console.log(`📁 Checking frontend build at: ${frontendBuildPath}`);
+  console.log(`📁 Absolute path: ${path.resolve(frontendBuildPath)}`);
+  console.log(`📁 Build exists: ${existsSync(frontendBuildPath)}`);
+  console.log(`📁 Index.html exists: ${existsSync(frontendIndexPath)}`);
+}
 
 // Check if frontend build exists and serve static files
 if (existsSync(frontendBuildPath)) {
@@ -157,7 +159,10 @@ app.use((req, res, next) => {
 // CRITICAL: All routes MUST be registered BEFORE the catch-all handler
 // This function ensures routes are registered correctly and verifies them
 function registerAllRoutes() {
-  console.log("\n🚀 Starting route registration...");
+  // Only log detailed route registration in development
+  if (process.env.NODE_ENV === 'development') {
+    console.log("\n🚀 Starting route registration...");
+  }
   
   // Step 1: Verify all route modules are imported correctly
   const routeModules = {
@@ -184,81 +189,75 @@ function registerAllRoutes() {
       console.error(error.message);
       throw error;
     }
-    console.log(`   ✅ ${name}Routes verified`);
-  }
-  
-  // Step 2: Register routes in guaranteed order (auth FIRST)
-  console.log("\n📝 Registering routes...");
-  
-  // CRITICAL: Auth routes MUST be registered first
-  app.use("/api/auth", authRoutes);
-  console.log("   ✅ /api/auth → authRoutes");
-  
-  // Register other routes
-  app.use("/api/projects", projectRoutes);
-  console.log("   ✅ /api/projects → projectRoutes");
-  
-  app.use("/api/tasks", taskRoutes);
-  console.log("   ✅ /api/tasks → taskRoutes");
-  
-  app.use("/api/users", userRoutes);
-  console.log("   ✅ /api/users → userRoutes");
-  
-  app.use("/api/dashboard", dashboardRoutes);
-  console.log("   ✅ /api/dashboard → dashboardRoutes");
-  
-  app.use("/api/upload", uploadRoutes);
-  console.log("   ✅ /api/upload → uploadRoutes");
-  
-  app.use("/api/profile-upload", profileUploadRoutes);
-  console.log("   ✅ /api/profile-upload → profileUploadRoutes");
-  
-  app.use("/api/access", accessRoutes);
-  console.log("   ✅ /api/access → accessRoutes");
-  
-  app.use("/api/file-management", fileManagementRoutes);
-  console.log("   ✅ /api/file-management → fileManagementRoutes");
-  
-  // Step 3: Verify routes are actually registered in Express
-  console.log("\n🔍 Verifying route registration in Express...");
-  const registeredRoutes = [];
-  let authRouterFound = false;
-  
-  if (app._router && app._router.stack) {
-    app._router.stack.forEach((middleware, index) => {
-      if (middleware.route) {
-        const methods = Object.keys(middleware.route.methods).join(', ').toUpperCase();
-        registeredRoutes.push(`[${index}] ${methods} ${middleware.route.path}`);
-      } else if (middleware.name === 'router') {
-        const regex = middleware.regexp.source;
-        // Check if this is the auth router
-        if (regex.includes('auth') || regex.includes('/api/auth')) {
-          authRouterFound = true;
-          console.log(`   ✅ Auth router found at stack index ${index}`);
-        }
-        registeredRoutes.push(`[${index}] Router: ${regex.substring(0, 50)}...`);
-      }
-    });
-  }
-  
-  if (!authRouterFound) {
-    // This is a known false positive - Express router structure makes it hard to verify
-    // Routes are actually registered correctly, this is just a limitation of the check
     if (process.env.NODE_ENV === 'development') {
-      console.log("   ℹ️  Note: Auth router verification check has limitations (this is normal)");
+      console.log(`   ✅ ${name}Routes verified`);
     }
   }
   
-  console.log(`   📊 Total middleware/routes in stack: ${registeredRoutes.length}`);
+  // Step 2: Register routes in guaranteed order (auth FIRST)
+  if (process.env.NODE_ENV === 'development') {
+    console.log("\n📝 Registering routes...");
+  }
   
-  // Step 4: Log critical routes
-  console.log("\n📋 Critical Auth Routes (should be accessible):");
-  console.log("   ✅ POST /api/auth/login");
-  console.log("   ✅ POST /api/auth/signup");
-  console.log("   ✅ GET  /api/auth/check-admin");
-  console.log("   ✅ GET  /api/auth/me (protected)");
+  // CRITICAL: Auth routes MUST be registered first
+  app.use("/api/auth", authRoutes);
+  app.use("/api/projects", projectRoutes);
+  app.use("/api/tasks", taskRoutes);
+  app.use("/api/users", userRoutes);
+  app.use("/api/dashboard", dashboardRoutes);
+  app.use("/api/upload", uploadRoutes);
+  app.use("/api/profile-upload", profileUploadRoutes);
+  app.use("/api/access", accessRoutes);
+  app.use("/api/file-management", fileManagementRoutes);
   
-  console.log("\n✅ Route registration completed successfully!");
+  if (process.env.NODE_ENV === 'development') {
+    console.log("   ✅ /api/auth → authRoutes");
+    console.log("   ✅ /api/projects → projectRoutes");
+    console.log("   ✅ /api/tasks → taskRoutes");
+    console.log("   ✅ /api/users → userRoutes");
+    console.log("   ✅ /api/dashboard → dashboardRoutes");
+    console.log("   ✅ /api/upload → uploadRoutes");
+    console.log("   ✅ /api/profile-upload → profileUploadRoutes");
+    console.log("   ✅ /api/access → accessRoutes");
+    console.log("   ✅ /api/file-management → fileManagementRoutes");
+    
+    // Step 3: Verify routes are actually registered in Express
+    console.log("\n🔍 Verifying route registration in Express...");
+    const registeredRoutes = [];
+    let authRouterFound = false;
+    
+    if (app._router && app._router.stack) {
+      app._router.stack.forEach((middleware, index) => {
+        if (middleware.route) {
+          const methods = Object.keys(middleware.route.methods).join(', ').toUpperCase();
+          registeredRoutes.push(`[${index}] ${methods} ${middleware.route.path}`);
+        } else if (middleware.name === 'router') {
+          const regex = middleware.regexp.source;
+          if (regex.includes('auth') || regex.includes('/api/auth')) {
+            authRouterFound = true;
+            console.log(`   ✅ Auth router found at stack index ${index}`);
+          }
+          registeredRoutes.push(`[${index}] Router: ${regex.substring(0, 50)}...`);
+        }
+      });
+    }
+    
+    if (!authRouterFound) {
+      console.log("   ℹ️  Note: Auth router verification check has limitations (this is normal)");
+    }
+    
+    console.log(`   📊 Total middleware/routes in stack: ${registeredRoutes.length}`);
+    
+    // Step 4: Log critical routes
+    console.log("\n📋 Critical Auth Routes (should be accessible):");
+    console.log("   ✅ POST /api/auth/login");
+    console.log("   ✅ POST /api/auth/signup");
+    console.log("   ✅ GET  /api/auth/check-admin");
+    console.log("   ✅ GET  /api/auth/me (protected)");
+    
+    console.log("\n✅ Route registration completed successfully!");
+  }
+  
   return true;
 }
 

@@ -21,20 +21,26 @@ const cloudinaryConfig = {
 const useCloudinary = cloudinaryConfig.cloud_name && cloudinaryConfig.api_key && cloudinaryConfig.api_secret;
 
 if (!useCloudinary) {
-  console.warn("⚠️ WARNING: Cloudinary credentials are missing for profile photos!");
-  console.warn("Using local file storage as fallback. Files will be stored in backend/uploads/profile/");
-  console.warn("For production, please set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET in your .env file");
+  // Only warn in development
+  if (process.env.NODE_ENV === 'development') {
+    console.warn("⚠️ WARNING: Cloudinary credentials are missing for profile photos!");
+    console.warn("Using local file storage as fallback. Files will be stored in backend/uploads/profile/");
+  }
   
   // Create uploads directory if it doesn't exist
   const uploadsDir = path.join(__dirname, "../uploads/profile");
   if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
-    console.log("✅ Created profile uploads directory");
+    if (process.env.NODE_ENV === 'development') {
+      console.log("✅ Created profile uploads directory");
+    }
   }
 } else {
   // Configure Cloudinary
   cloudinary.config(cloudinaryConfig);
-  console.log("✅ Cloudinary configured for profile photos");
+  if (process.env.NODE_ENV === 'development') {
+    console.log("✅ Cloudinary configured for profile photos");
+  }
 }
 
 // File filter - only allow image formats
