@@ -69,13 +69,21 @@ export const createProject = async (req, res) => {
 
     // Generate unique ID: timestamp + random component
     data.id = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Status and progress are automatically calculated from tasks
+    // Set initial values, will be recalculated when tasks are added
+    data.status = "Not Started";
+    data.progress = 0;
 
     const row = projectToRow(data);
     await appendRow(SHEET_NAME, row);
 
     return res
       .status(201)
-      .json({ message: "✅ Project created", project: data });
+      .json({ 
+        message: "✅ Project created. Status and progress will be automatically calculated from tasks.", 
+        project: data 
+      });
   } catch (err) {
     console.error("createProject error:", err.message);
     return res.status(500).json({ error: err.message });
@@ -127,7 +135,12 @@ export const updateProject = async (req, res) => {
       return res.status(404).json({ error: "Project not found" });
 
     const existing = rowToProject(rows[index]);
-    // merge updates
+    
+    // IMPORTANT: Status and progress are automatically calculated from tasks
+    // Do NOT allow manual updates to status/progress - they are read-only
+    // Only allow updates to: name, owner, description, startDate, endDate
+    
+    // merge updates (excluding status and progress - these are auto-calculated)
     const merged = {
       id: existing.id,
       name: update.name ?? existing.name,
@@ -135,17 +148,30 @@ export const updateProject = async (req, res) => {
       description: update.description ?? existing.description,
       startDate: update.startDate ?? existing.startDate,
       endDate: update.endDate ?? existing.endDate,
-      status: update.status ?? existing.status,
-      progress: update.progress !== undefined ? update.progress : existing.progress,
+      // Status and progress are NOT updated here - they come from task completion
+      status: existing.status, // Keep existing, will be recalculated
+      progress: existing.progress, // Keep existing, will be recalculated
     };
 
     // compute row number = header(1) + index + 1
     const rowNumber = 1 + index + 1;
     await updateRow(SHEET_NAME, rowNumber, projectToRow(merged));
 
+    // Recalculate project status and progress from tasks after update
+    // Status and progress are ALWAYS calculated from tasks, never manually set
+    const { recalcProjectProgress } = await import("./taskController.js");
+    await recalcProjectProgress(id);
+
+    // Get updated project data
+    const { rows: updatedRows } = await readSheetValues(SHEET_NAME);
+    const updatedProject = rowToProject(updatedRows[index]);
+
     return res
       .status(200)
-      .json({ message: "✅ Project updated successfully!", project: merged });
+      .json({ 
+        message: "✅ Project updated successfully! Status and progress are automatically calculated from tasks.", 
+        project: updatedProject 
+      });
   } catch (err) {
     console.error("updateProject error:", err.message);
     return res.status(500).json({ error: err.message });

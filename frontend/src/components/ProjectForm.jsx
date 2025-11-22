@@ -7,8 +7,8 @@ export default function ProjectForm({ initial = {}, onSave, onCancel }) {
     description: initial.description || "",
     startDate: initial.startDate || "",
     endDate: initial.endDate || "",
-    status: initial.status || "Not Started",
     owner: initial.owner || "",
+    // Note: status and progress are read-only, calculated from tasks
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -19,8 +19,8 @@ export default function ProjectForm({ initial = {}, onSave, onCancel }) {
       description: initial.description || "",
       startDate: initial.startDate || "",
       endDate: initial.endDate || "",
-      status: initial.status || "Not Started",
       owner: initial.owner || "",
+      // Note: status and progress are read-only, calculated from tasks
     });
   }, [initial]);
 
@@ -70,18 +70,17 @@ export default function ProjectForm({ initial = {}, onSave, onCancel }) {
         </label>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 mb-4">
-        <label>
-          <span className="text-sm">Status</span>
-          <select name="status" value={form.status} onChange={change}
-            className="mt-1 block w-full border rounded p-2">
-            <option>Not Started</option>
-            <option>In Progress</option>
-            <option>Completed</option>
-            <option>Blocked</option>
-          </select>
-        </label>
-
+      <div className="mb-4">
+        {initial.id && initial.status && (
+          <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded">
+            <span className="text-sm font-medium text-blue-800">Status: </span>
+            <span className="text-sm text-blue-600">{initial.status}</span>
+            <p className="text-xs text-blue-600 mt-1">
+              ⚠️ Status is automatically calculated from task completion. It cannot be changed manually.
+            </p>
+          </div>
+        )}
+        
         <label>
           <span className="text-sm">Owner (email)</span>
           <input name="owner" value={form.owner} onChange={change}

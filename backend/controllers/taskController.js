@@ -67,9 +67,10 @@ function rowToTask(row) {
  * Recalculate project progress and auto-complete if all tasks are Completed.
  * - progress = Math.round((completedTasks / totalTasks) * 100)
  * - if completedTasks === totalTasks => set project Status = "Completed" and progress = 100
+ * - Status is automatically calculated: "Not Started", "In Progress", or "Completed"
  * Returns { wasJustCompleted: boolean, projectName: string, ownerEmail: string } if project was just completed
  */
-async function recalcProjectProgress(projectId) {
+export async function recalcProjectProgress(projectId) {
   // Read tasks
   const { rows: taskRows } = await readSheetValues(SHEET_NAME);
   // filter rows for the project (rows array indexes do not include header)
@@ -101,7 +102,30 @@ async function recalcProjectProgress(projectId) {
   const projRow = projectRows[projectIndex];
   const previousStatus = (projRow[6] || "").toLowerCase();
   const wasCompleted = completed === total && total !== 0;
-  const updatedStatus = wasCompleted ? "Completed" : projRow[6] || "Not Started";
+  
+  // Determine status based on task completion:
+  // - If all tasks completed: "Completed"
+  // - If some tasks completed: "In Progress"
+  // - If no tasks or all not started: "Not Started"
+  let updatedStatus = "Not Started";
+  if (wasCompleted && total > 0) {
+    updatedStatus = "Completed";
+  } else if (completed > 0 && completed < total) {
+    updatedStatus = "In Progress";
+  } else if (total === 0) {
+    updatedStatus = "Not Started";
+  } else {
+    // Check if any task is in progress
+    const inProgressTasks = projectTasks.filter(
+      (r) => (r[8] || "").toLowerCase() === "in progress"
+    ).length;
+    if (inProgressTasks > 0) {
+      updatedStatus = "In Progress";
+    } else {
+      updatedStatus = "Not Started";
+    }
+  }
+  
   const wasJustCompleted = wasCompleted && previousStatus !== "completed";
 
   // Build new project row (same order as header: ID, Name, Owner, Description, StartDate, EndDate, Status, Progress)
