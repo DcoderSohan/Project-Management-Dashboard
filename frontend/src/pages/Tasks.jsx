@@ -19,10 +19,12 @@ export default function Tasks() {
     try {
       setLoading(true);
       const data = filterProject ? await fetchTasks(filterProject) : await fetchTasks();
-      setTasks(data);
+      setTasks(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Error loading tasks:", error);
-      alert("Failed to load tasks. Please try again.");
+      setTasks([]);
+      const errorMessage = error.response?.data?.error || error.message || "Failed to load tasks";
+      alert(`Failed to load tasks: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -31,18 +33,20 @@ export default function Tasks() {
   const loadProjects = async () => {
     try {
       const data = await fetchProjects();
-      setProjects(data);
+      setProjects(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Error loading projects:", error);
+      setProjects([]);
     }
   };
 
   const loadUsers = async () => {
     try {
       const data = await fetchUsers();
-      setUsers(data);
+      setUsers(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Error loading users:", error);
+      setUsers([]);
     }
   };
 

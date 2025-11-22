@@ -22,10 +22,12 @@ export default function Projects() {
     try {
       setLoading(true);
       const data = await fetchProjects();
-      setProjects(data);
+      setProjects(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Error loading projects:", error);
-      alert("Failed to load projects. Please try again.");
+      setProjects([]);
+      const errorMessage = error.response?.data?.error || error.message || "Failed to load projects";
+      alert(`Failed to load projects: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -35,12 +37,14 @@ export default function Projects() {
     try {
       setLoading(true);
       const data = await getUserSharedProjects(email);
-      setProjects(data);
+      setProjects(Array.isArray(data) ? data : []);
       setIsSharedView(true);
       setSharedEmail(email);
     } catch (error) {
       console.error("Error loading shared projects:", error);
-      alert("Failed to load shared projects. Please try again.");
+      setProjects([]);
+      const errorMessage = error.response?.data?.error || error.message || "Failed to load shared projects";
+      alert(`Failed to load shared projects: ${errorMessage}`);
     } finally {
       setLoading(false);
     }

@@ -14,10 +14,12 @@ export default function Users() {
     try {
       setLoading(true);
       const data = await fetchUsers();
-      setUsers(data);
+      setUsers(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Error loading users:", error);
-      alert("Failed to load users. Please try again.");
+      setUsers([]);
+      const errorMessage = error.response?.data?.error || error.message || "Failed to load users";
+      alert(`Failed to load users: ${errorMessage}`);
     } finally {
       setLoading(false);
     }

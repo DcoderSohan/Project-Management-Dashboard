@@ -80,18 +80,20 @@ export default function Dashboard() {
   const loadProjects = async () => {
     try {
       const data = await fetchProjects();
-      setProjects(data);
+      setProjects(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Error loading projects:", error);
+      setProjects([]);
     }
   };
 
   const loadUsers = async () => {
     try {
       const data = await fetchUsers();
-      setUsers(data);
+      setUsers(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Error loading users:", error);
+      setUsers([]);
     }
   };
 

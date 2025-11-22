@@ -114,12 +114,42 @@ export const authService = {
 
   // Get all users (admin only)
   async getAllUsers(token) {
-    const res = await api.get("/auth/users", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    return res.data;
+    try {
+      if (!token) {
+        throw new Error("Authentication token is required");
+      }
+      
+      const res = await api.get("/auth/users", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      
+      // Handle different response formats
+      if (Array.isArray(res.data)) {
+        return res.data;
+      } else if (res.data && Array.isArray(res.data.users)) {
+        return res.data.users;
+      } else if (res.data && Array.isArray(res.data.data)) {
+        return res.data.data;
+      } else {
+        console.warn("Unexpected response format from getAllUsers:", res.data);
+        return [];
+      }
+    } catch (error) {
+      console.error("Error in getAllUsers:", error);
+      // Re-throw with more context
+      if (error.response) {
+        // Server responded with error
+        throw error;
+      } else if (error.request) {
+        // Request made but no response
+        throw new Error("No response from server. Please check if the backend is running.");
+      } else {
+        // Error in request setup
+        throw new Error(error.message || "Failed to fetch users");
+      }
+    }
   },
 
   // Create user (admin only)

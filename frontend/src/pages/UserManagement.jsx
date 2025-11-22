@@ -31,18 +31,50 @@ export default function UserManagement() {
   });
 
   useEffect(() => {
-    loadUsers();
-  }, []);
+    if (token) {
+      loadUsers();
+    } else {
+      setError("Authentication required. Please log in.");
+      setLoading(false);
+    }
+  }, [token]);
 
   const loadUsers = async () => {
+    if (!token) {
+      setError("Authentication required. Please log in.");
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       setError("");
       const data = await authService.getAllUsers(token);
-      setUsers(data || []);
+      // Handle different response formats
+      if (Array.isArray(data)) {
+        setUsers(data);
+      } else if (data && Array.isArray(data.users)) {
+        setUsers(data.users);
+      } else if (data && data.data && Array.isArray(data.data)) {
+        setUsers(data.data);
+      } else {
+        setUsers([]);
+        if (!data || (typeof data === 'object' && Object.keys(data).length === 0)) {
+          console.warn("No users returned from API");
+        }
+      }
     } catch (error) {
       console.error("Error loading users:", error);
-      setError("Failed to load users. Please try again.");
+      const errorMessage = error.response?.data?.error || error.message || "Failed to load users. Please try again.";
+      setError(errorMessage);
+      setUsers([]);
+      
+      // If it's a 401/403, redirect to login
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        setTimeout(() => {
+          window.location.href = "/login";
+        }, 2000);
+      }
     } finally {
       setLoading(false);
     }

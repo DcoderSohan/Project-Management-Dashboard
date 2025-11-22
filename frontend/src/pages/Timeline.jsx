@@ -24,11 +24,14 @@ export default function Timeline() {
         fetchProjects(),
         fetchTasks(),
       ]);
-      setProjects(projectsData);
-      setTasks(tasksData);
+      setProjects(Array.isArray(projectsData) ? projectsData : []);
+      setTasks(Array.isArray(tasksData) ? tasksData : []);
     } catch (error) {
       console.error("Error loading data:", error);
-      alert("Failed to load timeline data. Please try again.");
+      setProjects([]);
+      setTasks([]);
+      const errorMessage = error.response?.data?.error || error.message || "Failed to load timeline data";
+      alert(`Failed to load timeline data: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
