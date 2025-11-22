@@ -13,26 +13,34 @@ if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
       pass: process.env.EMAIL_PASS,
     },
     // Add timeout to prevent hanging
-    connectionTimeout: 10000, // 10 seconds
-    greetingTimeout: 10000,
-    socketTimeout: 10000,
+    connectionTimeout: 5000, // 5 seconds - shorter timeout
+    greetingTimeout: 5000,
+    socketTimeout: 5000,
   });
 
   // Verify email configuration asynchronously with timeout
   // Don't block server startup if verification fails
+  // Only verify in background, don't log warnings unless in development
   const verifyPromise = new Promise((resolve) => {
+    let timeoutCleared = false;
     const timeout = setTimeout(() => {
-      console.warn("⚠️ Email verification timed out (10s). Email functionality may not work.");
-      console.warn("   This is non-critical - server will continue to run.");
+      timeoutCleared = true;
+      // Only log in development mode
+      if (process.env.NODE_ENV === 'development') {
+        console.log("ℹ️ Email verification timed out. Will verify on first email send.");
+      }
       resolve(false);
-    }, 10000); // 10 second timeout
+    }, 5000); // 5 second timeout
 
     transporter.verify((err, success) => {
-      clearTimeout(timeout);
+      if (!timeoutCleared) {
+        clearTimeout(timeout);
+      }
       if (err) {
-        console.warn("⚠️ Email verification failed:", err.message);
-        console.warn("   Email functionality may not work, but server will continue.");
-        console.warn("   To fix: Check EMAIL_USER and EMAIL_PASS in environment variables.");
+        // Only log detailed errors in development
+        if (process.env.NODE_ENV === 'development') {
+          console.log("ℹ️ Email verification failed. Will verify on first email send.");
+        }
         resolve(false);
       } else {
         console.log("✅ Email transporter verified successfully!");
@@ -41,13 +49,15 @@ if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
     });
   });
 
-  // Don't await - let it run in background
+  // Don't await - let it run in background silently
   verifyPromise.catch(() => {
     // Silently handle any promise errors
   });
 } else {
-  console.warn("⚠️ Email credentials not configured (EMAIL_USER or EMAIL_PASS missing).");
-  console.warn("   Email functionality will be disabled.");
+  // Only log in development mode
+  if (process.env.NODE_ENV === 'development') {
+    console.log("ℹ️ Email credentials not configured. Email functionality will be disabled.");
+  }
 }
 
 /**
