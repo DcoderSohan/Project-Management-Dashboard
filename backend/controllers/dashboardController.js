@@ -23,15 +23,36 @@ export const getDashboardData = async (req, res) => {
     });
 
     // Read all users to map emails to names
-    const { rows: userRows } = await readSheetValues("Users");
-    const userEmailToNameMap = {};
-    (userRows || []).forEach((row) => {
-      const userEmail = (row[2] || "").trim(); // Email
-      const userName = (row[1] || "").trim(); // Name
-      if (userEmail && userName) {
-        userEmailToNameMap[userEmail.toLowerCase()] = userName;
+    // Try AuthUsers first (for authentication users), then Users (for employee management)
+    let userEmailToNameMap = {};
+    try {
+      const { rows: authUserRows } = await readSheetValues("AuthUsers");
+      // AuthUsers columns: ID, Email, Password, Role, ProfilePhoto, CreatedAt, UpdatedAt, IsActive
+      (authUserRows || []).forEach((row) => {
+        const userEmail = (row[1] || "").trim(); // Email (column 1)
+        // For AuthUsers, use email as name if name not available
+        const userName = userEmail.split("@")[0] || userEmail; // Use email prefix as name
+        if (userEmail) {
+          userEmailToNameMap[userEmail.toLowerCase()] = userName;
+        }
+      });
+    } catch (authError) {
+      console.warn("⚠️ Could not read AuthUsers sheet, trying Users sheet:", authError.message);
+      try {
+        const { rows: userRows } = await readSheetValues("Users");
+        // Users columns: ID, Name, Email, Role, Department, etc.
+        (userRows || []).forEach((row) => {
+          const userEmail = (row[2] || "").trim(); // Email (column 2)
+          const userName = (row[1] || "").trim(); // Name (column 1)
+          if (userEmail) {
+            userEmailToNameMap[userEmail.toLowerCase()] = userName || userEmail.split("@")[0] || userEmail;
+          }
+        });
+      } catch (userError) {
+        console.warn("⚠️ Could not read Users sheet either:", userError.message);
+        // Continue without user mapping - will use email addresses instead
       }
-    });
+    }
 
     if (!taskRows || taskRows.length === 0) {
       return res.status(200).json({
