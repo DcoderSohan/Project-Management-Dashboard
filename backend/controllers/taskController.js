@@ -47,6 +47,17 @@ function taskToRow(t) {
  * Convert row -> task object
  */
 function rowToTask(row) {
+  // Handle attachments - ensure it's always an array
+  let attachments = [];
+  if (row[9]) {
+    if (typeof row[9] === 'string') {
+      // Split comma-separated string
+      attachments = row[9].split(",").map((s) => s.trim()).filter(s => s.length > 0);
+    } else if (Array.isArray(row[9])) {
+      attachments = row[9];
+    }
+  }
+  
   return {
     id: row[0] || "",
     projectId: row[1] || "",
@@ -57,7 +68,7 @@ function rowToTask(row) {
     endDate: row[6] || "",
     dueDate: row[7] || "",
     status: row[8] || "Not Started",
-    attachments: row[9] ? row[9].split(",").map((s) => s.trim()) : [],
+    attachments: attachments, // Always an array
     parentTaskId: row[10] || "", // ParentTaskID for subtasks
   };
 }
@@ -169,7 +180,8 @@ export const createTask = async (req, res) => {
     // Generate unique ID: timestamp + random component
     t.id = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     t.status = t.status || "Not Started";
-    t.attachments = t.attachments || [];
+    // Ensure attachments is always an array
+    t.attachments = Array.isArray(t.attachments) ? t.attachments : (t.attachments ? [t.attachments] : []);
     t.parentTaskId = t.parentTaskId || ""; // ParentTaskID for subtasks
 
     await appendRow(SHEET_NAME, taskToRow(t));
@@ -300,6 +312,14 @@ export const updateTask = async (req, res) => {
     const existing = rowToTask(rows[index]);
     
     // Merge updates
+    // Ensure attachments is always an array
+    let mergedAttachments = [];
+    if (update.attachments !== undefined) {
+      mergedAttachments = Array.isArray(update.attachments) ? update.attachments : [];
+    } else if (existing.attachments) {
+      mergedAttachments = Array.isArray(existing.attachments) ? existing.attachments : [];
+    }
+    
     const merged = {
       id: existing.id,
       projectId: update.projectId ?? existing.projectId,
@@ -310,7 +330,7 @@ export const updateTask = async (req, res) => {
       endDate: update.endDate ?? existing.endDate,
       dueDate: update.dueDate ?? existing.dueDate,
       status: update.status ?? existing.status,
-      attachments: update.attachments ?? existing.attachments,
+      attachments: mergedAttachments, // Always an array
       parentTaskId: update.parentTaskId !== undefined ? update.parentTaskId : existing.parentTaskId,
     };
 

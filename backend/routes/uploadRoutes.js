@@ -105,23 +105,52 @@ router.get("/test", (req, res) => {
 
 // Upload endpoint with proper error handling
 router.post("/", (req, res, next) => {
+  console.log("=== UPLOAD REQUEST RECEIVED ===");
+  console.log("Request method:", req.method);
+  console.log("Request path:", req.path);
+  console.log("Content-Type:", req.headers['content-type']);
+  console.log("Request body keys:", Object.keys(req.body || {}));
+  
   upload.array("files", 5)(req, res, (err) => {
     if (err) {
+      console.error("=== UPLOAD ERROR ===");
+      console.error("Error type:", err.constructor.name);
+      console.error("Error message:", err.message);
+      console.error("Error stack:", err.stack);
+      
       // Handle multer errors
       if (err instanceof multer.MulterError) {
         console.error("❌ Multer error:", err);
         console.error("Error code:", err.code);
-        console.error("Error message:", err.message);
         if (err.code === "LIMIT_FILE_SIZE") {
-          return res.status(400).json({ error: "File too large. Maximum size is 10MB." });
+          return res.status(400).json({ 
+            error: "File too large", 
+            message: "Maximum file size is 10MB per file.",
+            code: err.code 
+          });
         }
         if (err.code === "LIMIT_FILE_COUNT") {
-          return res.status(400).json({ error: "Too many files. Maximum is 5 files." });
+          return res.status(400).json({ 
+            error: "Too many files", 
+            message: "Maximum 5 files allowed per upload.",
+            code: err.code 
+          });
         }
-        return res.status(400).json({ error: "File upload error", message: err.message, code: err.code });
+        if (err.code === "LIMIT_UNEXPECTED_FILE") {
+          return res.status(400).json({ 
+            error: "Unexpected file field", 
+            message: "Files must be uploaded with field name 'files'.",
+            code: err.code 
+          });
+        }
+        return res.status(400).json({ 
+          error: "File upload error", 
+          message: err.message, 
+          code: err.code 
+        });
       }
       // Handle Cloudinary errors
-      if (err.message && err.message.includes("cloudinary")) {
+      if (err.message && (err.message.includes("cloudinary") || err.message.includes("Cloudinary"))) {
         console.error("❌ Cloudinary error:", err);
         return res.status(500).json({ 
           error: "Cloudinary upload failed", 
@@ -129,10 +158,15 @@ router.post("/", (req, res, next) => {
           details: "Please check your Cloudinary credentials and configuration"
         });
       }
+      // Handle file filter errors
+      if (err.message && err.message.includes("Invalid file type")) {
+        return res.status(400).json({ 
+          error: "Invalid file type", 
+          message: err.message,
+          allowedTypes: ["PDF", "DOC", "DOCX"]
+        });
+      }
       // Handle other errors
-      console.error("❌ Upload middleware error:", err);
-      console.error("Error type:", err.constructor.name);
-      console.error("Error stack:", err.stack);
       return res.status(500).json({ 
         error: "Upload failed", 
         message: err.message || "Unknown error occurred",
@@ -142,15 +176,24 @@ router.post("/", (req, res, next) => {
     
     // If no error, proceed with file processing
     try {
-      console.log("=== UPLOAD REQUEST RECEIVED ===");
-      console.log("Request body:", req.body);
-      console.log("Request files:", req.files ? req.files.length : 0);
-      console.log("Files details:", req.files);
+      console.log("=== PROCESSING UPLOAD ===");
+      console.log("Request files count:", req.files ? req.files.length : 0);
       
       if (!req.files || req.files.length === 0) {
-        console.log("ERROR: No files received");
-        return res.status(400).json({ error: "No files uploaded" });
+        console.log("ERROR: No files received in request");
+        return res.status(400).json({ 
+          error: "No files uploaded",
+          message: "Please select at least one file to upload.",
+          hint: "Ensure files are sent with field name 'files' in FormData"
+        });
       }
+      
+      console.log("Files received:", req.files.map(f => ({
+        originalname: f.originalname,
+        size: f.size,
+        mimetype: f.mimetype,
+        fieldname: f.fieldname
+      })));
       
       // Extract URLs from uploaded files
       const urls = req.files.map((file) => {
