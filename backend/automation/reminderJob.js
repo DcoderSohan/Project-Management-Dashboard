@@ -2,7 +2,7 @@ import cron from "node-cron";
 import { readSheetValues } from "../services/googleSheetService.js";
 import { sendEmail } from "../utils/sendEmail.js";
 import dotenv from "dotenv";
-dotenv.config();
+dotenv.config({ quiet: true }); // Suppress dotenv tips
 
 /**
  * Send task reminder emails

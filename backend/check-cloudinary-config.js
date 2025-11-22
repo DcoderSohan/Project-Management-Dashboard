@@ -2,7 +2,7 @@
 // Run this script to verify your Cloudinary setup: node check-cloudinary-config.js
 
 import dotenv from "dotenv";
-dotenv.config();
+dotenv.config({ quiet: true }); // Suppress dotenv tips
 
 console.log("🔍 Checking Cloudinary Configuration...\n");
 

@@ -1,6 +1,6 @@
 import nodemailer from "nodemailer";
 import dotenv from "dotenv";
-dotenv.config();
+dotenv.config({ quiet: true }); // Suppress dotenv tips
 
 // Check if environment variables are set
 if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {

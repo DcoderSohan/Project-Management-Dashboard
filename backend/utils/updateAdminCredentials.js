@@ -10,7 +10,7 @@ import {
 } from "../services/googleSheetService.js";
 import crypto from "crypto";
 
-dotenv.config();
+dotenv.config({ quiet: true }); // Suppress dotenv tips
 
 const SHEET_NAME = "AuthUsers";
 const NEW_ADMIN_EMAIL = "sohansarang05@gmail.com";
