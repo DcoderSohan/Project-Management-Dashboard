@@ -19,6 +19,7 @@ import uploadRoutes from "./routes/uploadRoutes.js";
 import profileUploadRoutes from "./routes/profileUploadRoutes.js";
 import accessRoutes from "./routes/accessRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
+import fileManagementRoutes from "./routes/fileManagementRoutes.js";
 
 // Import reminder job (load asynchronously to prevent blocking startup)
 // Use dynamic import to handle errors gracefully
@@ -166,6 +167,7 @@ function registerAllRoutes() {
     upload: uploadRoutes,
     profileUpload: profileUploadRoutes,
     access: accessRoutes,
+    fileManagement: fileManagementRoutes,
   };
   
   // Verify all routes exist
@@ -211,6 +213,9 @@ function registerAllRoutes() {
   
   app.use("/api/access", accessRoutes);
   console.log("   ✅ /api/access → accessRoutes");
+  
+  app.use("/api/file-management", fileManagementRoutes);
+  console.log("   ✅ /api/file-management → fileManagementRoutes");
   
   // Step 3: Verify routes are actually registered in Express
   console.log("\n🔍 Verifying route registration in Express...");

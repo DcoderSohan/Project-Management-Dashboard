@@ -1,7 +1,7 @@
 import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { FaClock, FaUsers, FaUser, FaSignOutAlt, FaCog } from "react-icons/fa";
+import { FaClock, FaUsers, FaUser, FaSignOutAlt, FaCog, FaFolder } from "react-icons/fa";
 
 export default function Navbar({ title }) {
   const location = useLocation();
@@ -19,6 +19,7 @@ export default function Navbar({ title }) {
 
   // Admin-only navigation links
   const adminNavLinks = [
+    { path: "/file-management", label: "File Management", icon: FaFolder },
     { path: "/logged-in-users", label: "Logged In Users", icon: FaUsers },
     { path: "/user-management", label: "User Management", icon: FaUsers },
   ];
