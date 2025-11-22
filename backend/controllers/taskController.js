@@ -376,13 +376,7 @@ export const updateTask = async (req, res) => {
       }
     }
 
-    // ✅ Send email if project was just completed
-    if (completionInfo?.wasJustCompleted && completionInfo.ownerEmail) {
-      await checkAndAutoCompleteProject(
-        completionInfo.projectName,
-        completionInfo.ownerEmail
-      );
-    }
+    // Project completion email is already handled above (after recalcProjectProgress call)
 
     return res.status(200).json({ 
       message: "✅ Task updated successfully", 
