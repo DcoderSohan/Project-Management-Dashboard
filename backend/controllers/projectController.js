@@ -7,6 +7,7 @@ import {
 } from "../services/googleSheetService.js";
 import { validateProject } from "../models/projectModel.js";
 import { sendEmail } from "../utils/sendEmail.js";
+import { recalcProjectProgress } from "./taskController.js";
 
 /**
  * Assumptions:
@@ -159,7 +160,6 @@ export const updateProject = async (req, res) => {
 
     // Recalculate project status and progress from tasks after update
     // Status and progress are ALWAYS calculated from tasks, never manually set
-    const { recalcProjectProgress } = await import("./taskController.js");
     await recalcProjectProgress(id);
 
     // Get updated project data
