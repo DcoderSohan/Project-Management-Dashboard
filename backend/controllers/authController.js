@@ -577,16 +577,30 @@ export const getCurrentUser = async (req, res) => {
     const user = req.user;
 
     if (!user) {
-      return res.status(401).json({ error: "User not found" });
+      console.warn("⚠️ getCurrentUser: req.user is missing");
+      return res.status(401).json({ error: "User not authenticated" });
     }
+
+    // Ensure user object has required fields
+    const userResponse = {
+      id: user.id || user.email || "",
+      email: user.email || "",
+      role: user.role || "user",
+      profilePhoto: user.profilePhoto || "",
+      isActive: user.isActive !== undefined ? user.isActive : true,
+    };
 
     return res.status(200).json({
       message: "✅ User retrieved",
-      user,
+      user: userResponse,
     });
   } catch (error) {
     console.error("❌ Get current user error:", error.message);
-    res.status(500).json({ error: error.message });
+    console.error("Error stack:", error.stack);
+    return res.status(500).json({ 
+      error: "Failed to retrieve user",
+      message: error.message 
+    });
   }
 };
 
