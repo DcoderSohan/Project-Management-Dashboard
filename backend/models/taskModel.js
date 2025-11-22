@@ -11,6 +11,7 @@ export const taskFields = {
     dueDate: "",
     status: "Not Started", // Not Started / In Progress / Completed
     attachments: [],       // File URLs if needed
+    parentTaskId: "",      // Parent task ID for subtasks (empty for main tasks)
   };
   
   // ✅ Validation helper

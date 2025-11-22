@@ -22,6 +22,7 @@ const TASK_HEADERS = [
   "DueDate",
   "Status",
   "Attachments",
+  "ParentTaskID", // New field for subtasks
 ];
 
 /**
@@ -39,6 +40,7 @@ function taskToRow(t) {
     t.dueDate || "",
     t.status || "Not Started",
     (t.attachments || []).join(", "),
+    t.parentTaskId || "", // ParentTaskID for subtasks
   ];
 }
 
@@ -57,6 +59,7 @@ function rowToTask(row) {
     dueDate: row[7] || "",
     status: row[8] || "Not Started",
     attachments: row[9] ? row[9].split(",").map((s) => s.trim()) : [],
+    parentTaskId: row[10] || "", // ParentTaskID for subtasks
   };
 }
 
@@ -70,7 +73,14 @@ async function recalcProjectProgress(projectId) {
   // Read tasks
   const { rows: taskRows } = await readSheetValues(SHEET_NAME);
   // filter rows for the project (rows array indexes do not include header)
-  const projectTasks = (taskRows || []).filter((r) => r[1] === projectId);
+  // Exclude subtasks (tasks with parentTaskId) - only count main tasks for project progress
+  // Column 10 is ParentTaskID (if it exists), empty/null means it's a main task
+  const projectTasks = (taskRows || []).filter((r) => {
+    const taskProjectId = r[1] || ""; // ProjectID
+    const parentTaskId = r[10] || ""; // ParentTaskID (column 10)
+    // Only include tasks for this project that are NOT subtasks (no parentTaskId)
+    return taskProjectId === projectId && !parentTaskId;
+  });
 
   // compute
   const total = projectTasks.length;
@@ -139,6 +149,7 @@ export const createTask = async (req, res) => {
     t.id = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     t.status = t.status || "Not Started";
     t.attachments = t.attachments || [];
+    t.parentTaskId = t.parentTaskId || ""; // ParentTaskID for subtasks
 
     await appendRow(SHEET_NAME, taskToRow(t));
 
@@ -255,6 +266,7 @@ export const updateTask = async (req, res) => {
       dueDate: update.dueDate ?? existing.dueDate,
       status: update.status ?? existing.status,
       attachments: update.attachments ?? existing.attachments,
+      parentTaskId: update.parentTaskId !== undefined ? update.parentTaskId : existing.parentTaskId,
     };
 
     // Check if task was reassigned or newly assigned
@@ -267,6 +279,28 @@ export const updateTask = async (req, res) => {
     // rowNumber = index + 2 (1 for header + 1 for 0-based to 1-based conversion)
     const rowNumber = index + 2;
     await updateRow(SHEET_NAME, rowNumber, taskToRow(merged));
+
+    // If this is a subtask and it was completed, check if parent task should be auto-completed
+    if (merged.parentTaskId && merged.status.toLowerCase() === "completed") {
+      const parentTaskIndex = (rows || []).findIndex((r) => r[0] === merged.parentTaskId);
+      if (parentTaskIndex !== -1) {
+        const parentTask = rowToTask(rows[parentTaskIndex]);
+        // Get all subtasks of this parent (column 10 is ParentTaskID)
+        const allSubtasks = (rows || []).filter((r) => (r[10] || "") === merged.parentTaskId);
+        const completedSubtasks = allSubtasks.filter((r) => (r[8] || "").toLowerCase() === "completed");
+        
+        // If all subtasks are completed, auto-complete the parent task
+        if (allSubtasks.length > 0 && completedSubtasks.length === allSubtasks.length && parentTask.status.toLowerCase() !== "completed") {
+          const updatedParent = {
+            ...parentTask,
+            status: "Completed",
+          };
+          const parentRowNumber = parentTaskIndex + 2;
+          await updateRow(SHEET_NAME, parentRowNumber, taskToRow(updatedParent));
+          console.log(`✅ Parent task "${parentTask.title}" auto-completed (all ${allSubtasks.length} subtasks completed)`);
+        }
+      }
+    }
 
     // Recalculate project progress after task update
     const completionInfo = await recalcProjectProgress(merged.projectId);

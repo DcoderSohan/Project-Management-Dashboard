@@ -53,7 +53,7 @@ export const getDashboardData = async (req, res) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0); // Reset time to start of day for comparison
 
-    // Task columns: ID, ProjectID, Title, Description, AssignedTo, StartDate, EndDate, DueDate, Status, Attachments
+    // Task columns: ID, ProjectID, Title, Description, AssignedTo, StartDate, EndDate, DueDate, Status, Attachments, ParentTaskID
     taskRows.forEach((row) => {
       const taskId = row[0] || ""; // ID
       const projectId = row[1] || ""; // ProjectID
@@ -64,6 +64,13 @@ export const getDashboardData = async (req, res) => {
       const endDate = row[6] || ""; // EndDate
       const dueDate = row[7] || ""; // DueDate (column 7, not 5)
       const status = (row[8] || "Not Started").trim(); // Status (column 8, not 6)
+      const parentTaskId = row[10] || ""; // ParentTaskID (column 10)
+      
+      // Skip subtasks in project progress calculation - only count main tasks
+      if (parentTaskId) {
+        // This is a subtask, skip it for project progress but count for status counts
+        // Status counts should include all tasks (main + subtasks)
+      } else {
 
       // Count status (case-insensitive)
       const statusLower = status.toLowerCase();
@@ -79,19 +86,20 @@ export const getDashboardData = async (req, res) => {
         statusCounts[status]++;
       }
 
-      // Track project progress by projectId
-      if (projectId) {
-        if (!projectProgress[projectId]) {
-          projectProgress[projectId] = {
-            projectId: projectId,
-            name: projectMap[projectId] || projectId,
-            total: 0,
-            completed: 0,
-          };
-        }
-        projectProgress[projectId].total++;
-        if (statusLower === "completed") {
-          projectProgress[projectId].completed++;
+        // Track project progress by projectId (only for main tasks, not subtasks)
+        if (projectId) {
+          if (!projectProgress[projectId]) {
+            projectProgress[projectId] = {
+              projectId: projectId,
+              name: projectMap[projectId] || projectId,
+              total: 0,
+              completed: 0,
+            };
+          }
+          projectProgress[projectId].total++;
+          if (statusLower === "completed") {
+            projectProgress[projectId].completed++;
+          }
         }
       }
 
@@ -133,16 +141,28 @@ export const getDashboardData = async (req, res) => {
     });
 
     // Calculate % completion per project
+    // Use actual progress from Projects sheet if available, otherwise calculate from tasks
     const projectCompletion = Object.values(projectProgress).map((data) => {
-      const progress = data.total > 0 
-        ? Math.round((data.completed / data.total) * 100) 
-        : 0;
+      // Get actual progress from Projects sheet
+      const projectRow = (projectRows || []).find((r) => r[0] === data.projectId);
+      let progress = 0;
+      
+      if (projectRow && projectRow[7]) {
+        // Use stored progress from Projects sheet (column 7 = Progress)
+        progress = Number(projectRow[7]) || 0;
+      } else {
+        // Fallback: calculate from tasks if progress not stored
+        progress = data.total > 0 
+          ? Math.round((data.completed / data.total) * 100) 
+          : 0;
+      }
+      
       return {
         projectId: data.projectId,
         project: data.name,
         totalTasks: data.total,
         completedTasks: data.completed,
-        progress: progress,
+        progress: Math.max(0, Math.min(100, progress)), // Ensure 0-100 range
       };
     });
 
