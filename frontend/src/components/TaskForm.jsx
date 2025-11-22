@@ -7,6 +7,7 @@ export default function TaskForm({
   onCancel,
   users = [],
   projects = [],
+  tasks = [], // For selecting parent task
 }) {
   const [form, setForm] = useState({
     title: initial.title || "",
@@ -17,6 +18,7 @@ export default function TaskForm({
     dueDate: initial.dueDate || "",
     status: initial.status || "Not Started",
     projectId: initial.projectId || "",
+    parentTaskId: initial.parentTaskId || "",
     attachments: initial.attachments || [],
   });
   const [selectedFiles, setSelectedFiles] = useState([]);
@@ -32,12 +34,30 @@ export default function TaskForm({
       dueDate: initial.dueDate || "",
       status: initial.status || "Not Started",
       projectId: initial.projectId || "",
+      parentTaskId: initial.parentTaskId || "",
       attachments: initial.attachments || [],
     });
     setSelectedFiles([]);
   }, [initial]);
 
-  const change = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  const change = (e) => {
+    const newForm = { ...form, [e.target.name]: e.target.value };
+    
+    // If parent task is selected, auto-set projectId from parent task
+    if (e.target.name === "parentTaskId" && e.target.value) {
+      const parentTask = tasks.find(t => t.id === e.target.value);
+      if (parentTask && parentTask.projectId) {
+        newForm.projectId = parentTask.projectId;
+      }
+    }
+    
+    // If parent task is cleared, allow project selection again
+    if (e.target.name === "parentTaskId" && !e.target.value) {
+      // Keep current projectId if it exists, otherwise clear it
+    }
+    
+    setForm(newForm);
+  };
 
   const onFileChange = (e) => {
     const files = Array.from(e.target.files);
@@ -161,6 +181,7 @@ export default function TaskForm({
           value={form.projectId}
           onChange={change}
           className="mt-1 block w-full p-2 border rounded"
+          disabled={!!form.parentTaskId} // Disable if this is a subtask
         >
           <option value="">-- select project --</option>
           {projects.map((pr, idx) => (
@@ -169,6 +190,31 @@ export default function TaskForm({
             </option>
           ))}
         </select>
+      </label>
+
+      <label className="block mb-2">
+        <span>Parent Task (Optional - leave empty for main task)</span>
+        <select
+          name="parentTaskId"
+          value={form.parentTaskId}
+          onChange={change}
+          className="mt-1 block w-full p-2 border rounded"
+        >
+          <option value="">-- No parent (Main Task) --</option>
+          {tasks
+            .filter((t) => !t.parentTaskId && t.id !== initial.id) // Only show main tasks, exclude current task
+            .filter((t) => !form.projectId || t.projectId === form.projectId) // Filter by selected project
+            .map((t, idx) => (
+              <option key={t.id || `task-${idx}`} value={t.id}>
+                {t.title} {t.projectId && `(${projects.find(p => p.id === t.projectId)?.name || t.projectId})`}
+              </option>
+            ))}
+        </select>
+        {form.parentTaskId && (
+          <p className="text-xs text-gray-500 mt-1">
+            This will be a subtask. Project will be inherited from parent task.
+          </p>
+        )}
       </label>
 
       <label className="block mb-2">

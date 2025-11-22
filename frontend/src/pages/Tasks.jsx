@@ -202,6 +202,7 @@ export default function Tasks() {
                   }}
                   users={users}
                   projects={projects}
+                  tasks={tasks}
                 />
               </div>
             </div>
@@ -227,12 +228,17 @@ export default function Tasks() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {tasks.map((task, index) => (
-              <div
-                key={task.id || `task-${index}`}
-                className="bg-white rounded-lg shadow-md hover:shadow-xl transition-shadow duration-300 p-6"
-              >
+          <div className="space-y-4">
+            {tasks
+              .filter((task) => !task.parentTaskId) // Only show main tasks first
+              .map((task, index) => {
+                // Get subtasks for this parent task
+                const subtasks = tasks.filter((t) => t.parentTaskId === task.id);
+                
+                return (
+                  <div key={task.id || `task-${index}`}>
+                    {/* Main Task */}
+                    <div className="bg-white rounded-lg shadow-md hover:shadow-xl transition-shadow duration-300 p-6">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
                     <h3 className="text-xl font-bold text-gray-800 mb-2">{task.title}</h3>
@@ -284,6 +290,16 @@ export default function Tasks() {
                   </span>
                   <div className="flex gap-2">
                     <button
+                      onClick={() => { 
+                        setEditing({ ...task, parentTaskId: task.id }); 
+                        setShowForm(true); 
+                      }}
+                      className="bg-purple-50 text-purple-600 px-3 py-1 rounded-lg hover:bg-purple-100 transition-colors text-sm"
+                      title="Add Subtask"
+                    >
+                      <FaPlus className="inline mr-1" /> Subtask
+                    </button>
+                    <button
                       onClick={() => { setEditing(task); setShowForm(true); }}
                       className="bg-blue-50 text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-100 transition-colors flex items-center gap-2"
                     >
@@ -298,7 +314,55 @@ export default function Tasks() {
                   </div>
                 </div>
               </div>
-            ))}
+              
+              {/* Subtasks */}
+              {subtasks.length > 0 && (
+                <div className="ml-8 mt-2 space-y-2 border-l-2 border-gray-300 pl-4">
+                  <div className="text-xs font-semibold text-gray-500 mb-2">
+                    Subtasks ({subtasks.length})
+                  </div>
+                  {subtasks.map((subtask, subIndex) => (
+                    <div
+                      key={subtask.id || `subtask-${subIndex}`}
+                      className="bg-gray-50 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-300 p-4"
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex-1">
+                          <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                            <span className="text-purple-600">└─</span>
+                            {subtask.title}
+                          </h4>
+                          {subtask.description && (
+                            <p className="text-gray-600 text-xs mt-1 line-clamp-1">{subtask.description}</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between pt-2 border-t border-gray-200">
+                        <span className={`px-2 py-1 rounded-full text-xs font-semibold border flex items-center gap-1 ${getStatusBadge(subtask.status)}`}>
+                          {getStatusIcon(subtask.status)}
+                          {subtask.status || "Not Started"}
+                        </span>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => { setEditing(subtask); setShowForm(true); }}
+                            className="bg-blue-50 text-blue-600 px-2 py-1 rounded text-xs hover:bg-blue-100"
+                          >
+                            <FaEdit />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(subtask.id)}
+                            className="bg-red-50 text-red-600 px-2 py-1 rounded text-xs hover:bg-red-100"
+                          >
+                            <FaTrash />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
           </div>
         )}
       </div>
