@@ -273,7 +273,80 @@ app.get("/api/health", (req, res) => {
   res.json({ 
     status: "ok", 
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || "development"
+    environment: process.env.NODE_ENV || "development",
+    routes: {
+      auth: "/api/auth",
+      projects: "/api/projects",
+      tasks: "/api/tasks",
+      users: "/api/users",
+      dashboard: "/api/dashboard",
+      upload: "/api/upload",
+      access: "/api/access"
+    }
+  });
+});
+
+// ✅ Route listing endpoint - helps debug 404 errors
+app.get("/api/routes", (req, res) => {
+  const routes = [];
+  
+  if (app._router && app._router.stack) {
+    app._router.stack.forEach((middleware) => {
+      if (middleware.route) {
+        const methods = Object.keys(middleware.route.methods).map(m => m.toUpperCase()).join(', ');
+        routes.push({
+          method: methods,
+          path: middleware.route.path,
+          type: "direct"
+        });
+      } else if (middleware.name === 'router' && middleware.regexp) {
+        const regex = middleware.regexp.source;
+        routes.push({
+          method: "ALL",
+          path: regex,
+          type: "router"
+        });
+      }
+    });
+  }
+  
+  res.json({
+    message: "Registered routes",
+    total: routes.length,
+    routes: routes,
+    availableEndpoints: {
+      auth: [
+        "POST /api/auth/login",
+        "POST /api/auth/signup",
+        "GET /api/auth/check-admin",
+        "GET /api/auth/me",
+        "PUT /api/auth/profile"
+      ],
+      projects: [
+        "GET /api/projects",
+        "GET /api/projects/:id",
+        "POST /api/projects",
+        "PUT /api/projects/:id",
+        "DELETE /api/projects/:id"
+      ],
+      tasks: [
+        "GET /api/tasks",
+        "GET /api/tasks/:id",
+        "POST /api/tasks",
+        "PUT /api/tasks/:id",
+        "DELETE /api/tasks/:id"
+      ],
+      users: [
+        "GET /api/users",
+        "GET /api/users/:id",
+        "POST /api/users",
+        "PUT /api/users/:id",
+        "DELETE /api/users/:id"
+      ],
+      dashboard: [
+        "GET /api/dashboard"
+      ]
+    }
   });
 });
 
@@ -396,21 +469,23 @@ app.use((req, res) => {
     console.error(`   Request URL: ${req.url}`);
     console.error(`   Original URL: ${req.originalUrl}`);
     console.error(`   Base URL: ${req.baseUrl}`);
-    console.error(`   This means:`);
-    console.error(`   1. The route handler was not registered`);
-    console.error(`   2. The route path doesn't match`);
-    console.error(`   3. The route was registered after the catch-all (should not happen)`);
-    console.error(`   4. The request might be hitting a different server instance`);
     
-    // Provide helpful error message
-    if (req.path === "/api/auth/login" || req.path === "/auth/login" || req.url === "/api/auth/login") {
-      console.error(`   ⚠️  LOGIN ROUTE NOT FOUND!`);
-      console.error(`   ⚠️  This is a critical error - login functionality will not work`);
-      console.error(`   ⚠️  Check:`);
-      console.error(`      1. Is authRoutes imported correctly?`);
-      console.error(`      2. Is app.use("/api/auth", authRoutes) called?`);
-      console.error(`      3. Is the server restarted after code changes?`);
-      console.error(`      4. Check server logs for route registration messages`);
+    // Provide helpful suggestions based on the path
+    let suggestions = [];
+    if (req.path.includes("/auth")) {
+      suggestions.push("Try: GET /api/auth/test to verify auth routes");
+      suggestions.push("Login: POST /api/auth/login");
+      suggestions.push("Check admin: GET /api/auth/check-admin");
+    } else if (req.path.includes("/projects")) {
+      suggestions.push("List projects: GET /api/projects");
+      suggestions.push("Get project: GET /api/projects/:id");
+    } else if (req.path.includes("/tasks")) {
+      suggestions.push("List tasks: GET /api/tasks");
+      suggestions.push("Get task: GET /api/tasks/:id");
+    } else if (req.path.includes("/users")) {
+      suggestions.push("List users: GET /api/users");
+    } else if (req.path.includes("/dashboard")) {
+      suggestions.push("Dashboard: GET /api/dashboard");
     }
     
     return res.status(404).json({ 
@@ -420,10 +495,21 @@ app.use((req, res) => {
       method: req.method,
       message: `The requested API endpoint '${req.method} ${req.path}' does not exist.`,
       hint: "Check that the route is registered in server.js before the catch-all handler.",
+      suggestions: suggestions,
+      availableEndpoints: {
+        test: "GET /api/test - List all available endpoints",
+        routes: "GET /api/routes - List registered routes",
+        health: "GET /api/health - Health check"
+      },
       troubleshooting: {
-        loginRoute: req.path.includes("login") ? "Login route not found. Check server logs for route registration." : null,
-        checkServerLogs: "Look for '✅ Auth routes registered at /api/auth' in server startup logs",
-        verifyRoute: "Test with: GET /api/auth/test or POST /api/auth/login-test"
+        checkServerLogs: "Look for route registration messages in server startup logs",
+        verifyRoute: "Test with: GET /api/test to see all available endpoints",
+        commonIssues: [
+          "Route might need authentication token",
+          "Check HTTP method (GET, POST, PUT, DELETE)",
+          "Verify route path matches exactly",
+          "Ensure server was restarted after code changes"
+        ]
       }
     });
   }
