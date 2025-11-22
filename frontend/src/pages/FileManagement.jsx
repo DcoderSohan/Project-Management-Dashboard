@@ -258,7 +258,7 @@ export default function FileManagement() {
           </div>
         ) : (
           <div className="space-y-6">
-            {Object.entries(groupedFiles).map(([projectId, tasks]) => {
+            {Object.entries(groupedFiles).map(([projectId, taskGroups]) => {
               const project = projects.find(p => p.id === projectId);
               return (
                 <div key={projectId} className="border border-gray-200 rounded-lg p-4">
@@ -267,13 +267,13 @@ export default function FileManagement() {
                     {project?.name || projectId || "General"}
                   </h3>
                   
-                  {Object.entries(tasks).map(([taskId, taskFiles]) => {
-                    const task = tasks.find(t => t.id === taskId);
+                  {Object.entries(taskGroups).map(([taskId, taskFiles]) => {
+                    const taskObj = tasks.find(t => t.id === taskId);
                     return (
                       <div key={taskId} className="ml-4 mb-4 last:mb-0">
                         <h4 className="font-medium text-md mb-2 flex items-center">
                           <span className="mr-2">📄</span>
-                          {task?.title || taskId || "General"}
+                          {taskObj?.title || taskId || "General"}
                         </h4>
                         
                         <div className="ml-4 space-y-2">
