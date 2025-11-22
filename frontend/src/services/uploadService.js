@@ -46,10 +46,20 @@ export const uploadFiles = async (files) => {
   });
   
   try {
-    console.log("Sending upload request to /api/upload");
+    console.log("Sending upload request to /upload");
+    console.log("Base URL:", uploadApi.defaults.baseURL);
+    console.log("FormData entries:", Array.from(formData.entries()).map(([key, value]) => 
+      [key, value instanceof File ? { name: value.name, size: value.size, type: value.type } : value]
+    ));
+    
     // Axios will automatically set Content-Type: multipart/form-data with boundary for FormData
     const res = await uploadApi.post("/upload", formData, {
-      timeout: 60000, // 60 second timeout
+      timeout: 120000, // 120 second timeout for large files
+      maxContentLength: 50 * 1024 * 1024, // 50MB max content length
+      maxBodyLength: 50 * 1024 * 1024, // 50MB max body length
+      headers: {
+        'Content-Type': 'multipart/form-data', // Explicitly set, axios will add boundary
+      },
       onUploadProgress: (progressEvent) => {
         if (progressEvent.total) {
           const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);

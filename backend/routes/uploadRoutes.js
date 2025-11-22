@@ -108,10 +108,14 @@ router.post("/", (req, res, next) => {
   console.log("=== UPLOAD REQUEST RECEIVED ===");
   console.log("Request method:", req.method);
   console.log("Request path:", req.path);
+  console.log("Request URL:", req.url);
   console.log("Content-Type:", req.headers['content-type']);
-  console.log("Request body keys:", Object.keys(req.body || {}));
+  console.log("Content-Length:", req.headers['content-length']);
   
-  upload.array("files", 5)(req, res, (err) => {
+  // Use upload.array with error handling
+  const uploadHandler = upload.array("files", 5);
+  
+  uploadHandler(req, res, (err) => {
     if (err) {
       console.error("=== UPLOAD ERROR ===");
       console.error("Error type:", err.constructor.name);
@@ -196,42 +200,70 @@ router.post("/", (req, res, next) => {
       })));
       
       // Extract URLs from uploaded files
-      const urls = req.files.map((file) => {
-        let url;
-        if (useCloudinary) {
-          // Cloudinary returns file with path/url/secure_url
-          url = file.path || file.url || file.secure_url;
-        } else {
-          // Local storage - return a full URL that can be accessed
-          const filename = file.filename;
-          const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 5000}`;
-          url = `${baseUrl}/uploads/${filename}`;
+      const urls = [];
+      for (const file of req.files) {
+        try {
+          let url;
+          if (useCloudinary) {
+            // Cloudinary returns file with path/url/secure_url
+            url = file.path || file.url || file.secure_url;
+            if (!url) {
+              console.error(`⚠️ Cloudinary file missing URL:`, file);
+              // Try to construct URL from public_id if available
+              if (file.public_id) {
+                url = cloudinary.url(file.public_id, { secure: true });
+              } else {
+                throw new Error(`Cloudinary upload succeeded but no URL returned for file: ${file.originalname}`);
+              }
+            }
+          } else {
+            // Local storage - return a full URL that can be accessed
+            const filename = file.filename;
+            const baseUrl = process.env.BASE_URL || process.env.VITE_API_URL?.replace('/api', '') || `http://localhost:${process.env.PORT || 5000}`;
+            url = `${baseUrl}/uploads/${filename}`;
+          }
+          console.log(`✅ File processed: ${file.originalname} -> URL: ${url}`);
+          urls.push(url);
+        } catch (fileError) {
+          console.error(`❌ Error processing file ${file.originalname}:`, fileError.message);
+          // Continue with other files, but log the error
+          console.error("File error details:", fileError);
         }
-        console.log(`File: ${file.originalname} -> URL: ${url}`);
-        return url;
-      });
+      }
+      
+      if (urls.length === 0) {
+        throw new Error("Failed to process any uploaded files");
+      }
       
       console.log("=== UPLOAD SUCCESS ===");
+      console.log(`Successfully processed ${urls.length} of ${req.files.length} files`);
       console.log("URLs returned:", urls);
       
-      res.json({ 
+      return res.json({ 
         success: true,
         urls: urls,
-        count: urls.length 
+        count: urls.length,
+        message: `Successfully uploaded ${urls.length} file(s)`
       });
     } catch (error) {
       console.error("=== UPLOAD PROCESSING ERROR ===");
       console.error("Error type:", error.constructor.name);
       console.error("Error message:", error.message);
       console.error("Error stack:", error.stack);
-      console.error("Full error object:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
       
-      res.status(500).json({ 
-        error: "Failed to process uploaded files", 
-        message: error.message || "Unknown error",
-        errorType: error.constructor.name,
-        details: process.env.NODE_ENV === "development" ? error.stack : undefined
-      });
+      // Don't expose stack trace in production
+      const errorResponse = {
+        error: "Failed to process uploaded files",
+        message: error.message || "Unknown error occurred",
+        errorType: error.constructor.name
+      };
+      
+      if (process.env.NODE_ENV === "development") {
+        errorResponse.stack = error.stack;
+        errorResponse.details = JSON.stringify(error, Object.getOwnPropertyNames(error));
+      }
+      
+      return res.status(500).json(errorResponse);
     }
   });
 });
