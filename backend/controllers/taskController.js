@@ -7,7 +7,6 @@ import {
   updateRow,
   deleteRowByIndex,
 } from "../services/googleSheetService.js";
-import { checkAndAutoCompleteProject } from "./projectController.js";
 import { sendEmail } from "../utils/sendEmail.js";
 
 const SHEET_NAME = "Tasks";
@@ -325,6 +324,21 @@ export const updateTask = async (req, res) => {
 
     // Recalculate project progress after task update
     const completionInfo = await recalcProjectProgress(merged.projectId);
+
+    // ✅ Send completion email if project was just completed
+    if (completionInfo?.wasJustCompleted && completionInfo?.ownerEmail) {
+      try {
+        await sendEmail(
+          completionInfo.ownerEmail,
+          "✅ Project Completed!",
+          `All tasks for project "${completionInfo.projectName}" are done. The project has been marked as Completed!`
+        );
+        console.log(`🎉 Email sent to ${completionInfo.ownerEmail} - Project "${completionInfo.projectName}" completed`);
+      } catch (emailError) {
+        console.error("❌ Error sending completion email:", emailError.message);
+        // Don't fail the request if email fails
+      }
+    }
 
     // ✅ Send email if task was assigned or reassigned
     if ((wasReassigned || wasNewlyAssigned) && merged.assignedTo) {
