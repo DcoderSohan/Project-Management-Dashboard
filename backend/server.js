@@ -475,57 +475,86 @@ app.get("/api/test/reminders", async (req, res) => {
   }
 });
 
-// ✅ Catch-all handler: serve React app for all non-API routes
-// CRITICAL: This MUST be the last middleware - placed AFTER all API routes
-// This fixes the 404 error when reloading pages with client-side routing
-// Must be placed AFTER all API routes and static file serving
-// This MUST be the last middleware - it should NEVER call next() to ensure it catches all routes
-app.use((req, res) => {
-  // CRITICAL: Check for API routes FIRST - if we reach here for an API route,
-  // it means the route wasn't registered or doesn't match
-  const isApiRoute = req.path.startsWith("/api") || req.path.startsWith("/uploads");
+// ✅ PERMANENT FIX: Catch-all handler for React Router
+// CRITICAL: This MUST be the absolute last middleware - placed AFTER all API routes
+// This fixes 404 errors when reloading pages with client-side routing
+// The handler serves index.html for all non-API routes, allowing React Router to handle routing
+app.use((req, res, next) => {
+  // CRITICAL: Skip API routes and uploads - these should be handled by API routes above
+  if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
+    return next(); // Let 404 handler catch API routes that don't exist
+  }
   
-  // CRITICAL: Check for static asset requests (JS, CSS, images, etc.)
-  // These should have been handled by express.static, but if they reach here,
-  // it means the file doesn't exist - try to serve from root anyway
+  // Skip static assets (they should be handled by express.static above)
   const pathWithoutQuery = req.path.split('?')[0];
-  const hasExtension = /\.[^/]+$/.test(pathWithoutQuery);
-  const isStaticAsset = hasExtension && (
-    pathWithoutQuery.startsWith("/assets/") ||
-    pathWithoutQuery.startsWith("/vite.svg") ||
-    pathWithoutQuery.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$/i)
-  );
+  const hasFileExtension = /\.[^/]+$/.test(pathWithoutQuery);
+  if (hasFileExtension && (
+    pathWithoutQuery.startsWith('/assets/') ||
+    pathWithoutQuery.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|json)$/i)
+  )) {
+    return next(); // Let 404 handler catch missing static files
+  }
   
-  // If it's a static asset request that wasn't found, try to serve it from root
-  if (isStaticAsset && existsSync(frontendBuildPath)) {
-    // Try to serve from root path (remove any route prefix)
-    const assetPath = path.join(frontendBuildPath, pathWithoutQuery);
-    if (existsSync(assetPath)) {
-      // Set proper content type
-      if (pathWithoutQuery.endsWith('.js')) {
-        res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-      } else if (pathWithoutQuery.endsWith('.css')) {
-        res.setHeader('Content-Type', 'text/css; charset=utf-8');
+  // Only handle GET and HEAD requests for client-side routes
+  // All other methods (POST, PUT, DELETE, etc.) should go to API routes
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    return next(); // Let 404 handler catch non-GET requests
+  }
+  
+  // For HEAD requests (health checks), just return 200 OK
+  if (req.method === 'HEAD') {
+    return res.status(200).end();
+  }
+  
+  // For GET requests to client-side routes, serve index.html to enable React Router
+  if (existsSync(frontendIndexPath)) {
+    const resolvedPath = path.resolve(frontendIndexPath);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    return res.sendFile(resolvedPath, (err) => {
+      if (err && !res.headersSent) {
+        console.error(`❌ Error serving index.html for ${req.path}:`, err.message);
+        return res.status(500).json({
+          error: "Error serving frontend",
+          message: err.message,
+          path: req.path,
+        });
       }
-      return res.sendFile(path.resolve(assetPath));
-    }
-    
-    // If asset path doesn't exist, try to find it in assets folder
-    if (pathWithoutQuery.startsWith('/assets/')) {
-      const assetName = pathWithoutQuery.replace('/assets/', '');
-      const assetsPath = path.join(frontendBuildPath, 'assets', assetName);
-      if (existsSync(assetsPath)) {
-        if (assetName.endsWith('.js')) {
-          res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-        } else if (assetName.endsWith('.css')) {
-          res.setHeader('Content-Type', 'text/css; charset=utf-8');
-        }
-        return res.sendFile(path.resolve(assetsPath));
+    });
+  }
+  
+  // Frontend build not found
+  if (!res.headersSent) {
+    return res.status(503).json({
+      error: "Frontend not built",
+      message: "The frontend build is missing. Please build the frontend first.",
+      path: req.path,
+    });
+  }
+});
+
+// ✅ Final 404 handler for unmatched routes (API routes, missing static files, etc.)
+app.use((req, res) => {
+  // Handle API routes that don't exist
+  if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
+    return res.status(404).json({
+      error: "API route not found",
+      path: req.path,
+      method: req.method,
+      message: `The requested API endpoint '${req.method} ${req.path}' does not exist.`,
+      availableEndpoints: {
+        health: "GET /api/health",
+        routes: "GET /api/routes",
       }
-    }
-    
-    // If asset not found, return 404 for assets (don't serve index.html)
-    console.error(`❌ Asset not found: ${req.path}`);
+    });
+  }
+  
+  // Handle missing static files
+  const pathWithoutQuery = req.path.split('?')[0];
+  const hasFileExtension = /\.[^/]+$/.test(pathWithoutQuery);
+  if (hasFileExtension) {
     return res.status(404).json({
       error: "Asset not found",
       path: req.path,
@@ -533,142 +562,22 @@ app.use((req, res) => {
     });
   }
   
-  if (isApiRoute) {
-    console.error(`❌ API/Upload route not found: ${req.method} ${req.path}`);
-    console.error(`   Requested path: ${req.path}`);
-    console.error(`   Request method: ${req.method}`);
-    console.error(`   Request URL: ${req.url}`);
-    console.error(`   Original URL: ${req.originalUrl}`);
-    console.error(`   Base URL: ${req.baseUrl}`);
-    
-    // Provide helpful suggestions based on the path
-    let suggestions = [];
-    if (req.path.includes("/auth")) {
-      suggestions.push("Try: GET /api/auth/test to verify auth routes");
-      suggestions.push("Login: POST /api/auth/login");
-      suggestions.push("Check admin: GET /api/auth/check-admin");
-    } else if (req.path.includes("/projects")) {
-      suggestions.push("List projects: GET /api/projects");
-      suggestions.push("Get project: GET /api/projects/:id");
-    } else if (req.path.includes("/tasks")) {
-      suggestions.push("List tasks: GET /api/tasks");
-      suggestions.push("Get task: GET /api/tasks/:id");
-    } else if (req.path.includes("/users")) {
-      suggestions.push("List users: GET /api/users");
-    } else if (req.path.includes("/dashboard")) {
-      suggestions.push("Dashboard: GET /api/dashboard");
-    }
-    
-    return res.status(404).json({ 
-      error: "API route not found", 
+  // For non-GET requests to non-API routes
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    return res.status(404).json({
+      error: "Route not found",
       path: req.path,
-      url: req.url,
       method: req.method,
-      message: `The requested API endpoint '${req.method} ${req.path}' does not exist.`,
-      hint: "Check that the route is registered in server.js before the catch-all handler.",
-      suggestions: suggestions,
-      availableEndpoints: {
-        test: "GET /api/test - List all available endpoints",
-        routes: "GET /api/routes - List registered routes",
-        health: "GET /api/health - Health check"
-      },
-      troubleshooting: {
-        checkServerLogs: "Look for route registration messages in server startup logs",
-        verifyRoute: "Test with: GET /api/test to see all available endpoints",
-        commonIssues: [
-          "Route might need authentication token",
-          "Check HTTP method (GET, POST, PUT, DELETE)",
-          "Verify route path matches exactly",
-          "Ensure server was restarted after code changes"
-        ]
-      }
+      message: "This route only accepts GET requests. API routes should be accessed via /api/*"
     });
   }
   
-  console.log(`🔍 Catch-all route hit: ${req.method} ${req.path}`);
-  
-  // Handle GET and HEAD requests (HEAD is used by Render for health checks)
-  // All other methods (POST, PUT, DELETE, etc.) should have been handled by API routes above
-  if (req.method !== "GET" && req.method !== "HEAD") {
-    console.log(`❌ Method not allowed for catch-all: ${req.method} ${req.path}`);
-    return res.status(404).json({ 
-      error: "Method not allowed", 
-      path: req.path, 
-      method: req.method,
-      message: "This route only accepts GET and HEAD requests. API routes should be accessed via /api/*"
-    });
-  }
-  
-  // For HEAD requests, just return 200 OK (health check)
-  if (req.method === "HEAD") {
-    return res.status(200).end();
-  }
-  
-  // For ALL GET requests that are not API/uploads and not static files, serve index.html
-  // This includes routes like /login, /projects, /timeline, /tasks, etc.
-  // Static files (with extensions) are handled by express.static above
-  // If a static file doesn't exist, express.static will call next() due to fallthrough: true
-  try {
-    // If frontend build exists, serve index.html (for production)
-    // This allows React Router to handle client-side routing
-    if (existsSync(frontendIndexPath)) {
-      const resolvedPath = path.resolve(frontendIndexPath);
-      // Only log in development
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`✅ Serving index.html for client-side route: ${req.path}`);
-      }
-      // Set proper headers to prevent caching issues
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
-      res.sendFile(resolvedPath, (err) => {
-        if (err) {
-          console.error(`❌ Error sending index.html for ${req.path}:`, err.message);
-          if (!res.headersSent) {
-            res.status(500).json({
-              error: "Error serving frontend",
-              message: err.message,
-              path: req.path,
-            });
-          }
-        }
-      });
-      return;
-    }
-    
-    // Frontend build not found - this should not happen in production
-    console.error(`❌ Frontend build not found at: ${frontendIndexPath}`);
-    console.error(`   Requested path: ${req.path}`);
-    console.error(`   Build path: ${frontendBuildPath}`);
-    console.error(`   Build path exists: ${existsSync(frontendBuildPath)}`);
-    console.error(`   Index path exists: ${existsSync(frontendIndexPath)}`);
-    
-    // Try to provide helpful error message
-    if (!res.headersSent) {
-      res.status(503).json({
-        error: "Frontend not built",
-        message: "The frontend build is missing. Please build the frontend before deploying.",
-        frontendPath: frontendIndexPath,
-        buildPath: frontendBuildPath,
-        exists: existsSync(frontendIndexPath),
-        buildExists: existsSync(frontendBuildPath),
-        requestedPath: req.path,
-        note: "In Render, make sure the build command includes: cd frontend && npm install && npm run build",
-      });
-    }
-  } catch (error) {
-    console.error("❌ Error in catch-all route:", error.message);
-    console.error("   Requested path:", req.path);
-    console.error("Full error:", error);
-    if (!res.headersSent) {
-      res.status(500).json({
-        error: "Internal server error",
-        message: error.message,
-        path: req.path,
-      });
-    }
-  }
+  // Final fallback - should not reach here if catch-all is working
+  return res.status(404).json({
+    error: "Route not found",
+    path: req.path,
+    message: "The requested route does not exist."
+  });
 });
 
 //6. Define server PORT (from .env or fallback to 5000)

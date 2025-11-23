@@ -158,7 +158,11 @@ export default function TaskForm({
         attachments: attachmentUrls,
       };
 
-      console.log("Saving task with payload:", { ...payload, attachments: attachmentUrls.length });
+      console.log("📎 Saving task with payload:");
+      console.log("📎 - Title:", payload.title);
+      console.log("📎 - Project ID:", payload.projectId);
+      console.log("📎 - Attachments count:", attachmentUrls.length);
+      console.log("📎 - Attachments data:", JSON.stringify(attachmentUrls, null, 2));
       await onSave(payload);
     } catch (error) {
       console.error("Error in task submission:", error);

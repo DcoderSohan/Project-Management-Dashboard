@@ -62,23 +62,38 @@ function taskToRow(t) {
 function rowToTask(row) {
   // Handle attachments - support both JSON format (with metadata) and comma-separated URLs (backward compatible)
   let attachments = [];
-  if (row[9]) {
-    if (typeof row[9] === 'string') {
+  const attachmentsColumn = row[9];
+  
+  if (attachmentsColumn) {
+    if (typeof attachmentsColumn === 'string') {
       // Try to parse as JSON first (new format with metadata)
       try {
-        const parsed = JSON.parse(row[9]);
+        // Google Sheets might escape quotes, so try parsing directly first
+        let parsed = JSON.parse(attachmentsColumn);
         if (Array.isArray(parsed)) {
           attachments = parsed;
         } else {
           // Not a valid JSON array, treat as comma-separated URLs
-          attachments = row[9].split(",").map((s) => s.trim()).filter(s => s.length > 0);
+          attachments = attachmentsColumn.split(",").map((s) => s.trim()).filter(s => s.length > 0);
         }
       } catch (e) {
-        // Not JSON, treat as comma-separated URLs (backward compatible)
-        attachments = row[9].split(",").map((s) => s.trim()).filter(s => s.length > 0);
+        // If JSON.parse fails, try to handle escaped JSON from Google Sheets
+        try {
+          // Google Sheets might double-escape, try unescaping once
+          const unescaped = attachmentsColumn.replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+          const parsed = JSON.parse(unescaped);
+          if (Array.isArray(parsed)) {
+            attachments = parsed;
+          } else {
+            attachments = attachmentsColumn.split(",").map((s) => s.trim()).filter(s => s.length > 0);
+          }
+        } catch (e2) {
+          // Not JSON, treat as comma-separated URLs (backward compatible)
+          attachments = attachmentsColumn.split(",").map((s) => s.trim()).filter(s => s.length > 0);
+        }
       }
-    } else if (Array.isArray(row[9])) {
-      attachments = row[9];
+    } else if (Array.isArray(attachmentsColumn)) {
+      attachments = attachmentsColumn;
     }
   }
   
@@ -93,6 +108,16 @@ function rowToTask(row) {
         size: null,
         uploadDate: new Date().toISOString(),
         type: fileName.split('.').pop() || 'unknown'
+      };
+    }
+    // Ensure object has all required fields
+    if (typeof att === 'object' && att !== null) {
+      return {
+        url: att.url || '',
+        name: att.name || 'File',
+        size: att.size || null,
+        uploadDate: att.uploadDate || new Date().toISOString(),
+        type: att.type || 'unknown'
       };
     }
     return att;
@@ -224,7 +249,13 @@ export const createTask = async (req, res) => {
     t.attachments = Array.isArray(t.attachments) ? t.attachments : (t.attachments ? [t.attachments] : []);
     t.parentTaskId = t.parentTaskId || ""; // ParentTaskID for subtasks
 
-    await appendRow(SHEET_NAME, taskToRow(t));
+    // Log attachments for debugging
+    console.log("📎 Creating task with attachments:", JSON.stringify(t.attachments, null, 2));
+    const rowData = taskToRow(t);
+    console.log("📎 Task row data (Attachments column):", rowData[9]);
+    
+    // Pass headers to ensure sheet structure is correct
+    await appendRow(SHEET_NAME, rowData, TASK_HEADERS);
 
     // recalc project progress after adding
     await recalcProjectProgress(t.projectId);
@@ -291,7 +322,12 @@ export const getAllTasks = async (req, res) => {
 
     const tasks = (rows || []).map((r) => {
       if (!r || !r[0]) return null; // Skip invalid rows
-      return rowToTask(r);
+      const task = rowToTask(r);
+      // Log attachments for debugging
+      if (task.attachments && task.attachments.length > 0) {
+        console.log(`📎 Task "${task.title}" has ${task.attachments.length} attachment(s)`, task.attachments);
+      }
+      return task;
     }).filter(t => t !== null); // Remove null entries
 
     const result = projectIdFilter
@@ -351,6 +387,11 @@ export const updateTask = async (req, res) => {
     // Get existing task
     const existing = rowToTask(rows[index]);
     
+    // Log for debugging
+    console.log("📎 Updating task:", id);
+    console.log("📎 Existing attachments:", JSON.stringify(existing.attachments, null, 2));
+    console.log("📎 Update attachments:", JSON.stringify(update.attachments, null, 2));
+    
     // Merge updates
     // Ensure attachments is always an array with proper format
     let mergedAttachments = [];
@@ -373,8 +414,20 @@ export const updateTask = async (req, res) => {
           type: fileName.split('.').pop() || 'unknown'
         };
       }
+      // Ensure object has all required fields
+      if (typeof att === 'object' && att !== null) {
+        return {
+          url: att.url || '',
+          name: att.name || 'File',
+          size: att.size || null,
+          uploadDate: att.uploadDate || new Date().toISOString(),
+          type: att.type || 'unknown'
+        };
+      }
       return att;
     });
+    
+    console.log("📎 Merged attachments:", JSON.stringify(mergedAttachments, null, 2));
     
     const merged = {
       id: existing.id,
@@ -399,7 +452,9 @@ export const updateTask = async (req, res) => {
     // index 0 = first data row = sheet row 2 (row 1 is header)
     // rowNumber = index + 2 (1 for header + 1 for 0-based to 1-based conversion)
     const rowNumber = index + 2;
-    await updateRow(SHEET_NAME, rowNumber, taskToRow(merged));
+    const rowData = taskToRow(merged);
+    console.log("📎 Saving task row data (Attachments column):", rowData[9]);
+    await updateRow(SHEET_NAME, rowNumber, rowData);
 
     // If this is a subtask and it was completed, check if parent task should be auto-completed
     if (merged.parentTaskId && merged.status.toLowerCase() === "completed") {

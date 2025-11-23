@@ -13,7 +13,11 @@ export const fetchTasks = async (projectId) => {
 
 export const createTask = async (payload) => {
   try {
+    console.log("📎 TaskService: Sending create task request");
+    console.log("📎 - Payload attachments:", JSON.stringify(payload.attachments, null, 2));
     const res = await api.post("/tasks", payload);
+    console.log("📎 TaskService: Task created successfully");
+    console.log("📎 - Response task attachments:", JSON.stringify(res.data?.task?.attachments, null, 2));
     return res.data;
   } catch (error) {
     console.error("Error creating task:", error);
@@ -26,7 +30,12 @@ export const updateTask = async (id, payload) => {
     if (!id) {
       throw new Error("Task ID is required");
     }
+    console.log("📎 TaskService: Sending update task request");
+    console.log("📎 - Task ID:", id);
+    console.log("📎 - Payload attachments:", JSON.stringify(payload.attachments, null, 2));
     const res = await api.put(`/tasks/${id}`, payload);
+    console.log("📎 TaskService: Task updated successfully");
+    console.log("📎 - Response task attachments:", JSON.stringify(res.data?.task?.attachments, null, 2));
     return res.data;
   } catch (error) {
     console.error("Error updating task:", error);
