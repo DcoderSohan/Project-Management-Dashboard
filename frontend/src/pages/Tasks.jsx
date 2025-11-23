@@ -179,7 +179,7 @@ export default function Tasks() {
             <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
               <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center z-10">
                 <h2 className="text-2xl font-bold text-gray-800">
-                  {editing ? "Edit Task" : "New Task"}
+                  {editing?.id ? "Edit Task" : editing?.parentTaskId ? "New Subtask" : "New Task"}
                 </h2>
                 <button
                   onClick={() => {
@@ -285,7 +285,12 @@ export default function Tasks() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => { 
-                        setEditing({ ...task, parentTaskId: task.id }); 
+                        // Create a new subtask - set parentTaskId and inherit projectId from parent
+                        setEditing({ 
+                          parentTaskId: task.id,
+                          projectId: task.projectId,
+                          status: "Not Started"
+                        }); 
                         setShowForm(true); 
                       }}
                       className="bg-purple-50 text-purple-600 px-3 py-1 rounded-lg hover:bg-purple-100 transition-colors text-sm"

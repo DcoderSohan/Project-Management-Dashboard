@@ -55,12 +55,34 @@ export default function TaskForm({
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!form.title || !form.projectId) {
-      return alert("Title and project are required");
+    
+    // For subtasks, projectId is inherited from parent, so we don't require it in the form
+    // But we still need to ensure it's set before saving
+    if (!form.title) {
+      return alert("Title is required");
+    }
+    
+    // If it's a subtask (has parentTaskId), ensure projectId is set from parent
+    if (form.parentTaskId && !form.projectId) {
+      const parentTask = tasks.find(t => t.id === form.parentTaskId);
+      if (parentTask && parentTask.projectId) {
+        form.projectId = parentTask.projectId;
+      } else {
+        return alert("Cannot create subtask: Parent task project not found");
+      }
+    }
+    
+    // For main tasks, projectId is required
+    if (!form.parentTaskId && !form.projectId) {
+      return alert("Project is required for main tasks");
     }
     
     try {
       const payload = { ...form };
+      // Clear the ID if it's a new task (not editing)
+      if (!initial.id) {
+        delete payload.id;
+      }
       await onSave(payload);
     } catch (error) {
       console.error("Error in task submission:", error);
@@ -125,30 +147,40 @@ export default function TaskForm({
         </select>
       </label>
 
-      <label className="block mb-2">
-        <span>Parent Task (Optional - leave empty for main task)</span>
-        <select
-          name="parentTaskId"
-          value={form.parentTaskId}
-          onChange={change}
-          className="mt-1 block w-full p-2 border rounded"
-        >
-          <option value="">-- No parent (Main Task) --</option>
-          {tasks
-            .filter((t) => !t.parentTaskId && t.id !== initial.id) // Only show main tasks, exclude current task
-            .filter((t) => !form.projectId || t.projectId === form.projectId) // Filter by selected project
-            .map((t, idx) => (
-              <option key={t.id || `task-${idx}`} value={t.id}>
-                {t.title} {t.projectId && `(${projects.find(p => p.id === t.projectId)?.name || t.projectId})`}
-              </option>
-            ))}
-        </select>
-        {form.parentTaskId && (
-          <p className="text-xs text-gray-500 mt-1">
-            This will be a subtask. Project will be inherited from parent task.
+      {/* Only show parent task selector if not already set as a subtask */}
+      {!form.parentTaskId && (
+        <label className="block mb-2">
+          <span>Parent Task (Optional - leave empty for main task)</span>
+          <select
+            name="parentTaskId"
+            value={form.parentTaskId}
+            onChange={change}
+            className="mt-1 block w-full p-2 border rounded"
+          >
+            <option value="">-- No parent (Main Task) --</option>
+            {tasks
+              .filter((t) => !t.parentTaskId && t.id !== initial.id) // Only show main tasks, exclude current task
+              .filter((t) => !form.projectId || t.projectId === form.projectId) // Filter by selected project
+              .map((t, idx) => (
+                <option key={t.id || `task-${idx}`} value={t.id}>
+                  {t.title} {t.projectId && `(${projects.find(p => p.id === t.projectId)?.name || t.projectId})`}
+                </option>
+              ))}
+          </select>
+        </label>
+      )}
+      
+      {/* Show parent task info if this is a subtask */}
+      {form.parentTaskId && (
+        <div className="block mb-2 p-3 bg-purple-50 border border-purple-200 rounded">
+          <p className="text-sm font-medium text-purple-800">
+            This is a subtask of: {tasks.find(t => t.id === form.parentTaskId)?.title || form.parentTaskId}
           </p>
-        )}
-      </label>
+          <p className="text-xs text-purple-600 mt-1">
+            Project is inherited from parent task and cannot be changed.
+          </p>
+        </div>
+      )}
 
       <label className="block mb-2">
         <span>Assigned To</span>

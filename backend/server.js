@@ -569,67 +569,74 @@ app.use((req, res, next) => {
 
 // ✅ Final 404 handler for unmatched routes (non-GET requests, API routes, etc.)
 app.use((req, res) => {
-  // Handle API routes that don't exist
-  if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
-    return res.status(404).json({
-      error: "API route not found",
-      path: req.path,
-      method: req.method,
-      message: `The requested API endpoint '${req.method} ${req.path}' does not exist.`,
-      availableEndpoints: {
-        health: "GET /api/health",
-        routes: "GET /api/routes",
-      }
-    });
-  }
-  
-  // Handle missing static files
-  const pathWithoutQuery = req.path.split('?')[0];
-  const hasFileExtension = /\.[^/]+$/.test(pathWithoutQuery);
-  if (hasFileExtension) {
-    return res.status(404).json({
-      error: "Asset not found",
-      path: req.path,
-      message: `The requested asset '${req.path}' does not exist.`
-    });
-  }
-  
-  // For non-GET requests to non-API routes, try to serve index.html anyway
-  // This handles POST/PUT/DELETE requests that might be misrouted
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
+  try {
+    // Handle API routes that don't exist
+    if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
+      return res.status(404).json({
+        error: "API route not found",
+        path: req.path,
+        method: req.method,
+        message: `The requested API endpoint '${req.method} ${req.path}' does not exist.`,
+        availableEndpoints: {
+          health: "GET /api/health",
+          routes: "GET /api/routes",
+        }
+      });
+    }
+    
+    // Handle missing static files
+    const pathWithoutQuery = req.path.split('?')[0];
+    const hasFileExtension = /\.[^/]+$/.test(pathWithoutQuery);
+    if (hasFileExtension) {
+      return res.status(404).json({
+        error: "Asset not found",
+        path: req.path,
+        message: `The requested asset '${req.path}' does not exist.`
+      });
+    }
+    
     // For HEAD requests, just return 200 OK
     if (req.method === 'HEAD') {
       return res.status(200).end();
     }
     
-    // For other methods, try to serve index.html (React Router will handle it)
+    // For all other requests (including GET), try to serve index.html as fallback
+    // This ensures React Router can handle client-side routing even if catch-all missed it
     if (existsSync(frontendIndexPath)) {
       const resolvedPath = path.resolve(frontendIndexPath);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      return res.sendFile(resolvedPath);
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      return res.sendFile(resolvedPath, (err) => {
+        if (err && !res.headersSent) {
+          console.error(`❌ Error serving index.html in final handler for ${req.path}:`, err.message);
+          return res.status(500).json({
+            error: "Error serving frontend",
+            path: req.path,
+            message: err.message
+          });
+        }
+      });
     }
     
+    // If we can't serve index.html, return 404
     return res.status(404).json({
       error: "Route not found",
       path: req.path,
       method: req.method,
-      message: "This route only accepts GET requests. API routes should be accessed via /api/*"
+      message: "The requested route does not exist."
     });
+  } catch (error) {
+    console.error(`❌ Error in final 404 handler for ${req.path}:`, error.message);
+    if (!res.headersSent) {
+      return res.status(500).json({
+        error: "Internal server error",
+        path: req.path,
+        message: error.message
+      });
+    }
   }
-  
-  // Final fallback for GET requests - should not reach here if catch-all is working
-  // But if it does, try to serve index.html
-  if (existsSync(frontendIndexPath)) {
-    const resolvedPath = path.resolve(frontendIndexPath);
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    return res.sendFile(resolvedPath);
-  }
-  
-  return res.status(404).json({
-    error: "Route not found",
-    path: req.path,
-    message: "The requested route does not exist."
-  });
 });
 
 //6. Define server PORT (from .env or fallback to 5000)
