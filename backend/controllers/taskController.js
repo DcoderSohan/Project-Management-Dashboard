@@ -28,6 +28,19 @@ const TASK_HEADERS = [
  * Convert task object -> row array (match header order)
  */
 function taskToRow(t) {
+  // Handle attachments - store as JSON array if objects, otherwise as comma-separated URLs (backward compatible)
+  let attachmentsStr = "";
+  if (t.attachments && t.attachments.length > 0) {
+    // Check if attachments are objects with metadata
+    if (typeof t.attachments[0] === 'object' && t.attachments[0] !== null) {
+      // Store as JSON array for rich metadata
+      attachmentsStr = JSON.stringify(t.attachments);
+    } else {
+      // Store as comma-separated URLs (backward compatible)
+      attachmentsStr = t.attachments.join(", ");
+    }
+  }
+  
   return [
     t.id || "",
     t.projectId || "",
@@ -38,7 +51,7 @@ function taskToRow(t) {
     t.endDate || "",
     t.dueDate || "",
     t.status || "Not Started",
-    (t.attachments || []).join(", "),
+    attachmentsStr,
     t.parentTaskId || "", // ParentTaskID for subtasks
   ];
 }
@@ -47,16 +60,43 @@ function taskToRow(t) {
  * Convert row -> task object
  */
 function rowToTask(row) {
-  // Handle attachments - ensure it's always an array
+  // Handle attachments - support both JSON format (with metadata) and comma-separated URLs (backward compatible)
   let attachments = [];
   if (row[9]) {
     if (typeof row[9] === 'string') {
-      // Split comma-separated string
-      attachments = row[9].split(",").map((s) => s.trim()).filter(s => s.length > 0);
+      // Try to parse as JSON first (new format with metadata)
+      try {
+        const parsed = JSON.parse(row[9]);
+        if (Array.isArray(parsed)) {
+          attachments = parsed;
+        } else {
+          // Not a valid JSON array, treat as comma-separated URLs
+          attachments = row[9].split(",").map((s) => s.trim()).filter(s => s.length > 0);
+        }
+      } catch (e) {
+        // Not JSON, treat as comma-separated URLs (backward compatible)
+        attachments = row[9].split(",").map((s) => s.trim()).filter(s => s.length > 0);
+      }
     } else if (Array.isArray(row[9])) {
       attachments = row[9];
     }
   }
+  
+  // Normalize attachments - convert URLs to objects if they're strings
+  attachments = attachments.map(att => {
+    if (typeof att === 'string') {
+      // Convert URL string to object with metadata
+      const fileName = att.split('/').pop() || att.split('\\').pop() || 'File';
+      return {
+        url: att,
+        name: fileName,
+        size: null,
+        uploadDate: new Date().toISOString(),
+        type: fileName.split('.').pop() || 'unknown'
+      };
+    }
+    return att;
+  });
   
   return {
     id: row[0] || "",
@@ -68,7 +108,7 @@ function rowToTask(row) {
     endDate: row[6] || "",
     dueDate: row[7] || "",
     status: row[8] || "Not Started",
-    attachments: attachments, // Always an array
+    attachments: attachments, // Always an array, now with metadata
     parentTaskId: row[10] || "", // ParentTaskID for subtasks
   };
 }
@@ -312,13 +352,29 @@ export const updateTask = async (req, res) => {
     const existing = rowToTask(rows[index]);
     
     // Merge updates
-    // Ensure attachments is always an array
+    // Ensure attachments is always an array with proper format
     let mergedAttachments = [];
     if (update.attachments !== undefined) {
       mergedAttachments = Array.isArray(update.attachments) ? update.attachments : [];
     } else if (existing.attachments) {
       mergedAttachments = Array.isArray(existing.attachments) ? existing.attachments : [];
     }
+    
+    // Normalize attachments - ensure all are objects with metadata
+    mergedAttachments = mergedAttachments.map(att => {
+      if (typeof att === 'string') {
+        // Convert URL string to object with metadata
+        const fileName = att.split('/').pop() || att.split('\\').pop() || 'File';
+        return {
+          url: att,
+          name: fileName,
+          size: null,
+          uploadDate: new Date().toISOString(),
+          type: fileName.split('.').pop() || 'unknown'
+        };
+      }
+      return att;
+    });
     
     const merged = {
       id: existing.id,

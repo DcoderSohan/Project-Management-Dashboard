@@ -397,14 +397,37 @@ export default function Tasks() {
               <div className="p-6">
                 {viewingFiles.attachments && viewingFiles.attachments.length > 0 ? (
                   <div className="space-y-4">
-                    <p className="text-gray-600 mb-4">
-                      {viewingFiles.attachments.length} file(s) attached to this task
-                    </p>
+                    <div className="flex items-center justify-between mb-4">
+                      <p className="text-gray-600">
+                        <strong>{viewingFiles.attachments.length}</strong> file(s) attached to this task
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Files saved in Google Sheets
+                      </p>
+                    </div>
                     <div className="space-y-3">
-                      {viewingFiles.attachments.map((url, idx) => {
-                        const fileName = url.split('/').pop() || `Attachment ${idx + 1}`;
-                        const isPdf = url.toLowerCase().includes('.pdf') || url.toLowerCase().includes('pdf');
-                        const isDoc = url.toLowerCase().includes('.doc') || url.toLowerCase().includes('doc');
+                      {viewingFiles.attachments.map((att, idx) => {
+                        // Handle both object format (with metadata) and string format (URL only)
+                        const fileInfo = typeof att === 'object' && att !== null ? att : {
+                          url: att,
+                          name: att.split('/').pop() || att.split('\\').pop() || `Attachment ${idx + 1}`,
+                          size: null,
+                          uploadDate: null,
+                          type: (att.split('.').pop() || 'unknown').toLowerCase()
+                        };
+                        
+                        const fileName = fileInfo.name;
+                        const fileUrl = fileInfo.url;
+                        const fileSize = fileInfo.size ? `${(fileInfo.size / 1024).toFixed(1)} KB` : 'Unknown size';
+                        const uploadDate = fileInfo.uploadDate ? new Date(fileInfo.uploadDate).toLocaleDateString() : null;
+                        const fileType = fileInfo.type || 'unknown';
+                        
+                        // Get file icon based on type
+                        const getFileIcon = () => {
+                          if (fileType === 'pdf') return '📄';
+                          if (['doc', 'docx'].includes(fileType)) return '📝';
+                          return '📎';
+                        };
                         
                         return (
                           <div
@@ -413,20 +436,28 @@ export default function Tasks() {
                           >
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-3 flex-1">
-                                <FaPaperclip className="text-blue-600 text-xl" />
-                                <div className="flex-1">
-                                  <p className="font-medium text-gray-800">{fileName}</p>
-                                  <p className="text-sm text-gray-500 truncate max-w-md">{url}</p>
+                                <span className="text-2xl">{getFileIcon()}</span>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium text-gray-800 truncate">{fileName}</p>
+                                  <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                                    <span>Size: {fileSize}</span>
+                                    {uploadDate && <span>Uploaded: {uploadDate}</span>}
+                                    <span className="uppercase bg-gray-100 px-2 py-0.5 rounded">{fileType}</span>
+                                  </div>
+                                  <p className="text-xs text-gray-400 truncate max-w-md mt-1">{fileUrl}</p>
                                 </div>
                               </div>
-                              <a
-                                href={url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-                              >
-                                <FaEye /> Open
-                              </a>
+                              <div className="flex gap-2">
+                                <a
+                                  href={fileUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                                  title="View/Download File"
+                                >
+                                  <FaEye /> View
+                                </a>
+                              </div>
                             </div>
                           </div>
                         );

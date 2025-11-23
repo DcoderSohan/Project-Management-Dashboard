@@ -27,10 +27,24 @@ const HEADER_COLUMNS = [
   "EndDate",
   "Status",
   "Progress",
+  "Attachments", // New field for file attachments
 ];
 
 // helper: convert object into row array
 function projectToRow(p) {
+  // Handle attachments - store as JSON array if objects, otherwise as comma-separated URLs (backward compatible)
+  let attachmentsStr = "";
+  if (p.attachments && p.attachments.length > 0) {
+    // Check if attachments are objects with metadata
+    if (typeof p.attachments[0] === 'object' && p.attachments[0] !== null) {
+      // Store as JSON array for rich metadata
+      attachmentsStr = JSON.stringify(p.attachments);
+    } else {
+      // Store as comma-separated URLs (backward compatible)
+      attachmentsStr = p.attachments.join(", ");
+    }
+  }
+  
   return [
     p.id || "",
     p.name || "",
@@ -40,6 +54,7 @@ function projectToRow(p) {
     p.endDate || "",
     p.status || "Not Started",
     p.progress !== undefined ? p.progress : 0,
+    attachmentsStr, // Attachments column
   ];
 }
 
@@ -49,6 +64,45 @@ function rowToProject(row) {
   for (let i = 0; i < HEADER_COLUMNS.length; i++) {
     obj[HEADER_COLUMNS[i]] = row[i] || "";
   }
+  
+  // Handle attachments - support both JSON format (with metadata) and comma-separated URLs (backward compatible)
+  let attachments = [];
+  if (obj.Attachments) {
+    if (typeof obj.Attachments === 'string') {
+      // Try to parse as JSON first (new format with metadata)
+      try {
+        const parsed = JSON.parse(obj.Attachments);
+        if (Array.isArray(parsed)) {
+          attachments = parsed;
+        } else {
+          // Not a valid JSON array, treat as comma-separated URLs
+          attachments = obj.Attachments.split(",").map((s) => s.trim()).filter(s => s.length > 0);
+        }
+      } catch (e) {
+        // Not JSON, treat as comma-separated URLs (backward compatible)
+        attachments = obj.Attachments.split(",").map((s) => s.trim()).filter(s => s.length > 0);
+      }
+    } else if (Array.isArray(obj.Attachments)) {
+      attachments = obj.Attachments;
+    }
+  }
+  
+  // Normalize attachments - convert URLs to objects if they're strings
+  attachments = attachments.map(att => {
+    if (typeof att === 'string') {
+      // Convert URL string to object with metadata
+      const fileName = att.split('/').pop() || att.split('\\').pop() || 'File';
+      return {
+        url: att,
+        name: fileName,
+        size: null,
+        uploadDate: new Date().toISOString(),
+        type: fileName.split('.').pop() || 'unknown'
+      };
+    }
+    return att;
+  });
+  
   // map to friendlier keys
   return {
     id: obj.ID,
@@ -59,6 +113,7 @@ function rowToProject(row) {
     endDate: obj.EndDate,
     status: obj.Status,
     progress: Number(obj.Progress) || 0,
+    attachments: attachments, // Always an array, now with metadata
   };
 }
 
@@ -158,6 +213,30 @@ export const updateProject = async (req, res) => {
     // Do NOT allow manual updates to status/progress - they are read-only
     // Only allow updates to: name, owner, description, startDate, endDate
     
+    // Handle attachments - merge updates
+    let mergedAttachments = [];
+    if (update.attachments !== undefined) {
+      mergedAttachments = Array.isArray(update.attachments) ? update.attachments : [];
+    } else if (existing.attachments) {
+      mergedAttachments = Array.isArray(existing.attachments) ? existing.attachments : [];
+    }
+    
+    // Normalize attachments - ensure all are objects with metadata
+    mergedAttachments = mergedAttachments.map(att => {
+      if (typeof att === 'string') {
+        // Convert URL string to object with metadata
+        const fileName = att.split('/').pop() || att.split('\\').pop() || 'File';
+        return {
+          url: att,
+          name: fileName,
+          size: null,
+          uploadDate: new Date().toISOString(),
+          type: fileName.split('.').pop() || 'unknown'
+        };
+      }
+      return att;
+    });
+    
     // merge updates (excluding status and progress - these are auto-calculated)
     const merged = {
       id: existing.id,
@@ -169,6 +248,7 @@ export const updateProject = async (req, res) => {
       // Status and progress are NOT updated here - they come from task completion
       status: existing.status, // Keep existing, will be recalculated
       progress: existing.progress, // Keep existing, will be recalculated
+      attachments: mergedAttachments, // Always an array, now with metadata
     };
 
     // compute row number = header(1) + index + 1

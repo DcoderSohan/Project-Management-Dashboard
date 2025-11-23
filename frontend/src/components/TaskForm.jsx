@@ -109,7 +109,35 @@ export default function TaskForm({
           const urls = await uploadFiles(selectedFiles);
           console.log("Uploaded files, got URLs:", urls);
           if (urls && urls.length > 0) {
-            attachmentUrls = [...attachmentUrls, ...urls];
+            // Create file metadata objects with name, url, size, and upload date
+            const newFileMetadata = urls.map((url, index) => {
+              const file = selectedFiles[index];
+              return {
+                url: url,
+                name: file.name,
+                size: file.size,
+                uploadDate: new Date().toISOString(),
+                type: file.name.split('.').pop() || 'unknown'
+              };
+            });
+            
+            // Merge with existing attachments (preserve existing metadata if objects, convert URLs if strings)
+            const existingAttachments = (form.attachments || []).map(att => {
+              if (typeof att === 'string') {
+                // Convert old URL format to object
+                const fileName = att.split('/').pop() || att.split('\\').pop() || 'File';
+                return {
+                  url: att,
+                  name: fileName,
+                  size: null,
+                  uploadDate: new Date().toISOString(),
+                  type: fileName.split('.').pop() || 'unknown'
+                };
+              }
+              return att;
+            });
+            
+            attachmentUrls = [...existingAttachments, ...newFileMetadata];
           }
         } catch (uploadError) {
           console.error("File upload error:", uploadError);
@@ -303,13 +331,17 @@ export default function TaskForm({
             <div className="mt-2">
               <small className="text-gray-600 block mb-1">Existing attachments:</small>
               <ul className="list-disc list-inside text-sm text-gray-500">
-                {form.attachments.map((url, idx) => (
-                  <li key={`attachment-${url}-${idx}`}>
-                    <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                      Attachment {idx + 1}
-                    </a>
-                  </li>
-                ))}
+                {form.attachments.map((att, idx) => {
+                  const fileName = typeof att === 'object' ? att.name : (att.split('/').pop() || `Attachment ${idx + 1}`);
+                  const fileUrl = typeof att === 'object' ? att.url : att;
+                  return (
+                    <li key={`attachment-${fileUrl}-${idx}`}>
+                      <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                        {fileName}
+                      </a>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}
