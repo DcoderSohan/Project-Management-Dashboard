@@ -115,10 +115,23 @@ if (process.env.NODE_ENV === 'development') {
 
 // Check if frontend build exists and serve static files
 if (existsSync(frontendBuildPath)) {
-  // Serve static assets (JS, CSS, images) from the dist folder
-  // CRITICAL: Serve static files BEFORE API routes to prevent 404 errors on assets
-  // IMPORTANT: Use fallthrough: true so non-existent files continue to catch-all route
-  // This ensures assets are always served from root, regardless of the current route
+  // CRITICAL: Serve static assets with explicit path matching
+  // This ensures assets are ALWAYS served from root, regardless of current route
+  // Serve assets directory explicitly to catch all asset requests
+  app.use('/assets', express.static(path.join(frontendBuildPath, 'assets'), {
+    maxAge: '1d',
+    etag: true,
+    lastModified: true,
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('.js')) {
+        res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+      } else if (filePath.endsWith('.css')) {
+        res.setHeader('Content-Type', 'text/css; charset=utf-8');
+      }
+    }
+  }));
+  
+  // Serve other static files (vite.svg, etc.) from root
   app.use(express.static(frontendBuildPath, { 
     fallthrough: true, // Continue to next middleware if file doesn't exist
     index: false, // Don't serve index.html automatically
@@ -136,6 +149,7 @@ if (existsSync(frontendBuildPath)) {
   }));
   
   console.log("✅ Serving static files from frontend/dist");
+  console.log(`✅ Serving /assets from ${path.join(frontendBuildPath, 'assets')}`);
   console.log(`✅ Frontend index.html path: ${frontendIndexPath}`);
   console.log(`✅ Frontend index.html exists: ${existsSync(frontendIndexPath)}`);
 } else {
@@ -484,11 +498,34 @@ app.use((req, res) => {
   
   // If it's a static asset request that wasn't found, try to serve it from root
   if (isStaticAsset && existsSync(frontendBuildPath)) {
+    // Try to serve from root path (remove any route prefix)
     const assetPath = path.join(frontendBuildPath, pathWithoutQuery);
     if (existsSync(assetPath)) {
+      // Set proper content type
+      if (pathWithoutQuery.endsWith('.js')) {
+        res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+      } else if (pathWithoutQuery.endsWith('.css')) {
+        res.setHeader('Content-Type', 'text/css; charset=utf-8');
+      }
       return res.sendFile(path.resolve(assetPath));
     }
+    
+    // If asset path doesn't exist, try to find it in assets folder
+    if (pathWithoutQuery.startsWith('/assets/')) {
+      const assetName = pathWithoutQuery.replace('/assets/', '');
+      const assetsPath = path.join(frontendBuildPath, 'assets', assetName);
+      if (existsSync(assetsPath)) {
+        if (assetName.endsWith('.js')) {
+          res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+        } else if (assetName.endsWith('.css')) {
+          res.setHeader('Content-Type', 'text/css; charset=utf-8');
+        }
+        return res.sendFile(path.resolve(assetsPath));
+      }
+    }
+    
     // If asset not found, return 404 for assets (don't serve index.html)
+    console.error(`❌ Asset not found: ${req.path}`);
     return res.status(404).json({
       error: "Asset not found",
       path: req.path,
