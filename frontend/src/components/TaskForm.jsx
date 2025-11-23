@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { uploadFiles } from "../services/uploadService";
 
 export default function TaskForm({
   initial = {},
@@ -19,10 +18,7 @@ export default function TaskForm({
     status: initial.status || "Not Started",
     projectId: initial.projectId || "",
     parentTaskId: initial.parentTaskId || "",
-    attachments: initial.attachments || [],
   });
-  const [selectedFiles, setSelectedFiles] = useState([]);
-  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     setForm({
@@ -35,9 +31,7 @@ export default function TaskForm({
       status: initial.status || "Not Started",
       projectId: initial.projectId || "",
       parentTaskId: initial.parentTaskId || "",
-      attachments: initial.attachments || [],
     });
-    setSelectedFiles([]);
   }, [initial]);
 
   const change = (e) => {
@@ -59,116 +53,18 @@ export default function TaskForm({
     setForm(newForm);
   };
 
-  const onFileChange = (e) => {
-    const files = Array.from(e.target.files);
-    
-    // Validate file types
-    const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-    const allowedExtensions = ['.pdf', '.doc', '.docx'];
-    
-    const validFiles = [];
-    const invalidFiles = [];
-    
-    files.forEach(file => {
-      const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
-      const isValidType = allowedTypes.includes(file.type) || allowedExtensions.includes(fileExtension);
-      
-      if (isValidType) {
-        validFiles.push(file);
-      } else {
-        invalidFiles.push(file.name);
-      }
-    });
-    
-    if (invalidFiles.length > 0) {
-      alert(`Invalid file type(s): ${invalidFiles.join(', ')}\n\nPlease upload only PDF, DOC, or DOCX files.`);
-    }
-    
-    if (validFiles.length > 5) {
-      alert('Maximum 5 files allowed. Only the first 5 files will be uploaded.');
-      setSelectedFiles(validFiles.slice(0, 5));
-    } else {
-      setSelectedFiles(validFiles);
-    }
-  };
-
   const submit = async (e) => {
     e.preventDefault();
     if (!form.title || !form.projectId) {
       return alert("Title and project are required");
     }
     
-    setUploading(true);
     try {
-      let attachmentUrls = Array.isArray(form.attachments) ? [...form.attachments] : [];
-      
-      // Upload new files if any (only for main tasks, not subtasks)
-      if (selectedFiles.length > 0 && !form.parentTaskId) {
-        console.log("Uploading files:", selectedFiles.map(f => f.name));
-        try {
-          const urls = await uploadFiles(selectedFiles);
-          console.log("Uploaded files, got URLs:", urls);
-          if (urls && urls.length > 0) {
-            // Create file metadata objects with name, url, size, and upload date
-            const newFileMetadata = urls.map((url, index) => {
-              const file = selectedFiles[index];
-              return {
-                url: url,
-                name: file.name,
-                size: file.size,
-                uploadDate: new Date().toISOString(),
-                type: file.name.split('.').pop() || 'unknown'
-              };
-            });
-            
-            // Merge with existing attachments (preserve existing metadata if objects, convert URLs if strings)
-            const existingAttachments = (form.attachments || []).map(att => {
-              if (typeof att === 'string') {
-                // Convert old URL format to object
-                const fileName = att.split('/').pop() || att.split('\\').pop() || 'File';
-                return {
-                  url: att,
-                  name: fileName,
-                  size: null,
-                  uploadDate: new Date().toISOString(),
-                  type: fileName.split('.').pop() || 'unknown'
-                };
-              }
-              return att;
-            });
-            
-            attachmentUrls = [...existingAttachments, ...newFileMetadata];
-          }
-        } catch (uploadError) {
-          console.error("File upload error:", uploadError);
-          const errorMessage = uploadError.message || "Failed to upload files";
-          alert(`File upload failed: ${errorMessage}\n\nTask will be saved without the new attachments.`);
-          // Continue with saving the task even if file upload fails
-        }
-      }
-      
-      // Clear attachments for subtasks
-      if (form.parentTaskId) {
-        attachmentUrls = [];
-      }
-
-      // Build payload with attachment URLs
-      const payload = {
-        ...form,
-        attachments: attachmentUrls,
-      };
-
-      console.log("📎 Saving task with payload:");
-      console.log("📎 - Title:", payload.title);
-      console.log("📎 - Project ID:", payload.projectId);
-      console.log("📎 - Attachments count:", attachmentUrls.length);
-      console.log("📎 - Attachments data:", JSON.stringify(attachmentUrls, null, 2));
+      const payload = { ...form };
       await onSave(payload);
     } catch (error) {
       console.error("Error in task submission:", error);
       alert(`Failed to save task: ${error.message || "Unknown error"}`);
-    } finally {
-      setUploading(false);
     }
   };
 
@@ -304,54 +200,6 @@ export default function TaskForm({
         </label>
       </div>
 
-      {/* Only show attachments for main tasks, not subtasks */}
-      {!form.parentTaskId && (
-        <label className="block mb-2">
-          <span>Attachments (optional) - PDF and Documents only</span>
-          <input
-            type="file"
-            multiple
-            accept=".pdf,.doc,.docx"
-            onChange={onFileChange}
-            className="mt-1 block w-full p-2 border rounded"
-            disabled={uploading}
-          />
-          <small className="text-gray-500 block mt-1">
-            Accepted formats: PDF, DOC, DOCX (Max 5 files, 10MB each)
-          </small>
-          {selectedFiles.length > 0 && (
-            <div className="mt-2 p-2 bg-blue-50 rounded">
-              <small className="text-blue-700 block font-medium">
-                {selectedFiles.length} file(s) selected:
-              </small>
-              <ul className="mt-1 text-sm text-blue-600">
-                {selectedFiles.map((file, idx) => (
-                  <li key={`selected-${file.name}-${idx}`}>• {file.name} ({(file.size / 1024).toFixed(1)} KB)</li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {form.attachments && form.attachments.length > 0 && (
-            <div className="mt-2">
-              <small className="text-gray-600 block mb-1">Existing attachments:</small>
-              <ul className="list-disc list-inside text-sm text-gray-500">
-                {form.attachments.map((att, idx) => {
-                  const fileName = typeof att === 'object' ? att.name : (att.split('/').pop() || `Attachment ${idx + 1}`);
-                  const fileUrl = typeof att === 'object' ? att.url : att;
-                  return (
-                    <li key={`attachment-${fileUrl}-${idx}`}>
-                      <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                        {fileName}
-                      </a>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          )}
-        </label>
-      )}
-
       <div className="flex justify-end gap-2 mt-4">
         <button
           type="button"
@@ -362,10 +210,9 @@ export default function TaskForm({
         </button>
         <button
           type="submit"
-          disabled={uploading}
-          className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
+          className="px-4 py-2 bg-blue-600 text-white rounded"
         >
-          {uploading ? "Uploading..." : "Save"}
+          Save
         </button>
       </div>
     </form>

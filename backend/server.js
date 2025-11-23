@@ -496,85 +496,75 @@ app.get("/api/test/reminders", async (req, res) => {
 // The handler serves index.html for all non-API routes, allowing React Router to handle routing
 // Using app.use() instead of app.get('*') to avoid path-to-regexp errors
 app.use((req, res, next) => {
-  // Only handle GET and HEAD requests for client-side routes
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
+  try {
+    // Only handle GET and HEAD requests for client-side routes
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      return next();
+    }
+    
+    // CRITICAL: Skip API routes and uploads - these should be handled by API routes above
+    if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
+      return next();
+    }
+    
+    // Skip static assets (they should be handled by express.static above)
+    const pathWithoutQuery = req.path.split('?')[0];
+    const hasFileExtension = /\.[^/]+$/.test(pathWithoutQuery);
+    if (hasFileExtension && (
+      pathWithoutQuery.startsWith('/assets/') ||
+      pathWithoutQuery.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|json)$/i)
+    )) {
+      return next();
+    }
+    
+    // For HEAD requests (health checks), just return 200 OK
+    if (req.method === 'HEAD') {
+      return res.status(200).end();
+    }
+    
+    // For ALL other GET requests (client-side routes), serve index.html
+    // This allows React Router to handle the routing on the client side
+    if (existsSync(frontendIndexPath)) {
+      const resolvedPath = path.resolve(frontendIndexPath);
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      return res.sendFile(resolvedPath, (err) => {
+        if (err && !res.headersSent) {
+          console.error(`❌ Error serving index.html for ${req.path}:`, err.message);
+          return res.status(500).send(`
+            <html>
+              <head><title>Error</title></head>
+              <body>
+                <h1>Error serving frontend</h1>
+                <p>${err.message}</p>
+                <p>Path: ${req.path}</p>
+              </body>
+            </html>
+          `);
+        }
+      });
+    }
+    
+    // Frontend build not found - call next to let final handler catch it
+    return next();
+  } catch (error) {
+    console.error(`❌ Error in catch-all handler for ${req.path}:`, error.message);
+    if (!res.headersSent) {
+      return res.status(500).send(`
+        <html>
+          <head><title>Server Error</title></head>
+          <body>
+            <h1>Server Error</h1>
+            <p>An error occurred while processing your request.</p>
+            <p>Path: ${req.path}</p>
+          </body>
+        </html>
+      `);
+    }
     return next();
   }
-  
-  // CRITICAL: Skip API routes and uploads - these should be handled by API routes above
-  if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
-    return next();
-  }
-  
-  // Skip static assets (they should be handled by express.static above)
-  const pathWithoutQuery = req.path.split('?')[0];
-  const hasFileExtension = /\.[^/]+$/.test(pathWithoutQuery);
-  if (hasFileExtension && (
-    pathWithoutQuery.startsWith('/assets/') ||
-    pathWithoutQuery.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|json)$/i)
-  )) {
-    return next();
-  }
-  
-  // For HEAD requests (health checks), just return 200 OK
-  if (req.method === 'HEAD') {
-    return res.status(200).end();
-  }
-  
-  // Log the request for debugging (only in production to help diagnose issues)
-  if (process.env.NODE_ENV === 'production') {
-    console.log(`🔍 Serving index.html for client-side route: ${req.path}`);
-  }
-  
-  // For ALL other GET requests (client-side routes), serve index.html
-  // This allows React Router to handle the routing on the client side
-  if (existsSync(frontendIndexPath)) {
-    const resolvedPath = path.resolve(frontendIndexPath);
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-    return res.sendFile(resolvedPath, (err) => {
-      if (err && !res.headersSent) {
-        console.error(`❌ Error serving index.html for ${req.path}:`, err.message);
-        console.error(`   Frontend index path: ${frontendIndexPath}`);
-        console.error(`   Frontend index exists: ${existsSync(frontendIndexPath)}`);
-        return res.status(500).send(`
-          <html>
-            <head><title>Error</title></head>
-            <body>
-              <h1>Error serving frontend</h1>
-              <p>${err.message}</p>
-              <p>Path: ${req.path}</p>
-            </body>
-          </html>
-        `);
-      }
-    });
-  }
-  
-  // Frontend build not found - still try to serve a helpful error page
-  console.error(`❌ Frontend build not found at: ${frontendIndexPath}`);
-  console.error(`   Requested path: ${req.path}`);
-  console.error(`   Build path: ${frontendBuildPath}`);
-  console.error(`   Build exists: ${existsSync(frontendBuildPath)}`);
-  console.error(`   Index exists: ${existsSync(frontendIndexPath)}`);
-  if (!res.headersSent) {
-    return res.status(503).send(`
-      <html>
-        <head><title>Frontend Not Built</title></head>
-        <body>
-          <h1>Frontend Not Built</h1>
-          <p>The frontend build is missing. Please build the frontend first.</p>
-          <p>Path: ${req.path}</p>
-          <p>Build path: ${frontendBuildPath}</p>
-        </body>
-      </html>
-    `);
-  }
-  
-  // If we get here, something went wrong - call next to let the final handler catch it
-  next();
 });
 
 // ✅ Final 404 handler for unmatched routes (non-GET requests, API routes, etc.)

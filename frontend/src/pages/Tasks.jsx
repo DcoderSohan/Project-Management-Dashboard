@@ -4,7 +4,7 @@ import TaskForm from "../components/TaskForm";
 import { fetchTasks, createTask, updateTask, deleteTask } from "../services/taskService";
 import { fetchProjects } from "../services/projectService";
 import { fetchUsers } from "../services/userService";
-import { FaPlus, FaEdit, FaTrash, FaCheckCircle, FaClock, FaExclamationTriangle, FaFilter, FaPaperclip, FaEye } from "react-icons/fa";
+import { FaPlus, FaEdit, FaTrash, FaCheckCircle, FaClock, FaExclamationTriangle, FaFilter } from "react-icons/fa";
 
 export default function Tasks() {
   const [tasks, setTasks] = useState([]);
@@ -14,7 +14,6 @@ export default function Tasks() {
   const [showForm, setShowForm] = useState(false);
   const [filterProject, setFilterProject] = useState("");
   const [loading, setLoading] = useState(true);
-  const [viewingFiles, setViewingFiles] = useState(null);
 
   const loadTasks = async () => {
     try {
@@ -276,12 +275,6 @@ export default function Tasks() {
                       <span>{task.dueDate}</span>
                     </div>
                   )}
-                  {task.attachments && task.attachments.length > 0 && (
-                    <div className="flex items-center gap-2 text-sm text-blue-600">
-                      <FaPaperclip />
-                      <span>{task.attachments.length} attachment(s)</span>
-                    </div>
-                  )}
                 </div>
 
                 <div className="flex items-center justify-between pt-4 border-t">
@@ -290,15 +283,6 @@ export default function Tasks() {
                     {task.status || "Not Started"}
                   </span>
                   <div className="flex gap-2">
-                    {task.attachments && task.attachments.length > 0 && (
-                      <button
-                        onClick={() => setViewingFiles(task)}
-                        className="bg-green-50 text-green-600 px-4 py-2 rounded-lg hover:bg-green-100 transition-colors flex items-center gap-2"
-                        title="View Files"
-                      >
-                        <FaEye /> View Files ({task.attachments.length})
-                      </button>
-                    )}
                     <button
                       onClick={() => { 
                         setEditing({ ...task, parentTaskId: task.id }); 
@@ -377,103 +361,6 @@ export default function Tasks() {
           </div>
         )}
 
-        {/* View Files Modal */}
-        {viewingFiles && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center z-10">
-                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                  <FaPaperclip />
-                  Files for: {viewingFiles.title}
-                </h2>
-                <button
-                  onClick={() => setViewingFiles(null)}
-                  className="text-gray-500 hover:text-gray-700 text-3xl font-light leading-none"
-                  aria-label="Close"
-                >
-                  ×
-                </button>
-              </div>
-              <div className="p-6">
-                {viewingFiles.attachments && viewingFiles.attachments.length > 0 ? (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between mb-4">
-                      <p className="text-gray-600">
-                        <strong>{viewingFiles.attachments.length}</strong> file(s) attached to this task
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        Files saved in Google Sheets
-                      </p>
-                    </div>
-                    <div className="space-y-3">
-                      {viewingFiles.attachments.map((att, idx) => {
-                        // Handle both object format (with metadata) and string format (URL only)
-                        const fileInfo = typeof att === 'object' && att !== null ? att : {
-                          url: att,
-                          name: att.split('/').pop() || att.split('\\').pop() || `Attachment ${idx + 1}`,
-                          size: null,
-                          uploadDate: null,
-                          type: (att.split('.').pop() || 'unknown').toLowerCase()
-                        };
-                        
-                        const fileName = fileInfo.name;
-                        const fileUrl = fileInfo.url;
-                        const fileSize = fileInfo.size ? `${(fileInfo.size / 1024).toFixed(1)} KB` : 'Unknown size';
-                        const uploadDate = fileInfo.uploadDate ? new Date(fileInfo.uploadDate).toLocaleDateString() : null;
-                        const fileType = fileInfo.type || 'unknown';
-                        
-                        // Get file icon based on type
-                        const getFileIcon = () => {
-                          if (fileType === 'pdf') return '📄';
-                          if (['doc', 'docx'].includes(fileType)) return '📝';
-                          return '📎';
-                        };
-                        
-                        return (
-                          <div
-                            key={`file-${idx}`}
-                            className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors"
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3 flex-1">
-                                <span className="text-2xl">{getFileIcon()}</span>
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-medium text-gray-800 truncate">{fileName}</p>
-                                  <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
-                                    <span>Size: {fileSize}</span>
-                                    {uploadDate && <span>Uploaded: {uploadDate}</span>}
-                                    <span className="uppercase bg-gray-100 px-2 py-0.5 rounded">{fileType}</span>
-                                  </div>
-                                  <p className="text-xs text-gray-400 truncate max-w-md mt-1">{fileUrl}</p>
-                                </div>
-                              </div>
-                              <div className="flex gap-2">
-                                <a
-                                  href={fileUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-                                  title="View/Download File"
-                                >
-                                  <FaEye /> View
-                                </a>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <FaPaperclip className="text-gray-400 text-4xl mx-auto mb-4" />
-                    <p className="text-gray-600">No files attached to this task</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
