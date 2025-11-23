@@ -112,6 +112,7 @@ router.post("/", verifyToken, (req, res, next) => {
   console.log("Request URL:", req.url);
   console.log("Content-Type:", req.headers['content-type']);
   console.log("Content-Length:", req.headers['content-length']);
+  console.log("User authenticated:", req.user?.email || "Unknown");
   
   // Use upload.array with error handling
   const uploadHandler = upload.array("files", 5);

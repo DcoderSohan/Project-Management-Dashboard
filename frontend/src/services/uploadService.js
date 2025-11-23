@@ -53,13 +53,12 @@ export const uploadFiles = async (files) => {
     ));
     
     // Axios will automatically set Content-Type: multipart/form-data with boundary for FormData
+    // DO NOT set Content-Type manually - let axios set it with the boundary
     const res = await uploadApi.post("/upload", formData, {
       timeout: 120000, // 120 second timeout for large files
       maxContentLength: 50 * 1024 * 1024, // 50MB max content length
       maxBodyLength: 50 * 1024 * 1024, // 50MB max body length
-      headers: {
-        'Content-Type': 'multipart/form-data', // Explicitly set, axios will add boundary
-      },
+      // Remove explicit Content-Type header - axios will set it automatically with boundary
       onUploadProgress: (progressEvent) => {
         if (progressEvent.total) {
           const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
@@ -86,12 +85,21 @@ export const uploadFiles = async (files) => {
     if (error.response) {
       console.error("Response status:", error.response.status);
       console.error("Response data:", error.response.data);
+      
+      // Handle authentication errors
+      if (error.response.status === 401) {
+        const errorMessage = error.response.data?.error || error.response.data?.message || "Authentication required";
+        throw new Error(`${errorMessage}. Please login again.`);
+      }
+      
+      // Handle other HTTP errors
       const errorMessage = error.response.data?.error || error.response.data?.message || "Failed to upload files";
       const errorDetails = error.response.data?.details ? `\nDetails: ${error.response.data.details}` : "";
       throw new Error(`${errorMessage}${errorDetails}`);
     } else if (error.request) {
       console.error("No response received from server");
-      throw new Error("No response from server. Please check if the backend is running.");
+      console.error("Request config:", error.config);
+      throw new Error("No response from server. Please check if the backend is running and you are connected to the internet.");
     } else {
       console.error("Error setting up request:", error.message);
       throw new Error(`Upload failed: ${error.message}`);

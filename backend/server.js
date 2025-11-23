@@ -94,8 +94,12 @@ app.use((err, req, res, next) => {
   next();
 });
 
-// Serve uploaded files statically
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+// Serve uploaded files statically (BEFORE static file middleware)
+app.use("/uploads", express.static(path.join(__dirname, "uploads"), {
+  maxAge: '1d',
+  etag: true,
+  lastModified: true
+}));
 
 // ✅ Serve static files from React app build (for production)
 const frontendBuildPath = path.join(__dirname, "..", "frontend", "dist");
@@ -112,32 +116,15 @@ if (process.env.NODE_ENV === 'development') {
 // Check if frontend build exists and serve static files
 if (existsSync(frontendBuildPath)) {
   // Serve static assets (JS, CSS, images) from the dist folder
+  // CRITICAL: Serve static files BEFORE API routes to prevent 404 errors on assets
   // Use fallthrough: true so non-existent files continue to catch-all route
-  const staticMiddleware = express.static(frontendBuildPath, { 
+  app.use(express.static(frontendBuildPath, { 
     fallthrough: true, // Continue to next middleware if file doesn't exist
-    index: false // Don't serve index.html automatically
-  });
-  
-  // Wrap static middleware to only handle requests for files with extensions
-  app.use((req, res, next) => {
-    // Skip API routes and uploads
-    if (req.path.startsWith("/api") || req.path.startsWith("/uploads")) {
-      return next();
-    }
-    
-    // Check if it's a request for a static file (has extension)
-    const pathWithoutQuery = req.path.split('?')[0];
-    const hasExtension = /\.[^/]+$/.test(pathWithoutQuery);
-    
-    if (hasExtension) {
-      // It's a static file - let express.static handle it
-      // With fallthrough: true, express.static will call next() if file doesn't exist
-      staticMiddleware(req, res, next);
-    } else {
-      // Not a static file - pass to catch-all route
-      next();
-    }
-  });
+    index: false, // Don't serve index.html automatically
+    maxAge: '1d', // Cache static assets for 1 day
+    etag: true, // Enable ETag for caching
+    lastModified: true // Enable Last-Modified header
+  }));
   
   console.log("✅ Serving static files from frontend/dist");
   console.log(`✅ Frontend index.html path: ${frontendIndexPath}`);
