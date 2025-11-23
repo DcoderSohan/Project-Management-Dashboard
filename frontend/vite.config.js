@@ -4,6 +4,8 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  // Explicitly set base path to root to prevent resource loading errors on nested routes
+  base: '/',
   server: {
     proxy: {
       '/api': {
