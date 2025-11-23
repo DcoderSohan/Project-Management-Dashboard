@@ -117,13 +117,22 @@ if (process.env.NODE_ENV === 'development') {
 if (existsSync(frontendBuildPath)) {
   // Serve static assets (JS, CSS, images) from the dist folder
   // CRITICAL: Serve static files BEFORE API routes to prevent 404 errors on assets
-  // Use fallthrough: true so non-existent files continue to catch-all route
+  // IMPORTANT: Use fallthrough: true so non-existent files continue to catch-all route
+  // This ensures assets are always served from root, regardless of the current route
   app.use(express.static(frontendBuildPath, { 
     fallthrough: true, // Continue to next middleware if file doesn't exist
     index: false, // Don't serve index.html automatically
     maxAge: '1d', // Cache static assets for 1 day
     etag: true, // Enable ETag for caching
-    lastModified: true // Enable Last-Modified header
+    lastModified: true, // Enable Last-Modified header
+    setHeaders: (res, filePath) => {
+      // Set proper content type headers
+      if (filePath.endsWith('.js')) {
+        res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+      } else if (filePath.endsWith('.css')) {
+        res.setHeader('Content-Type', 'text/css; charset=utf-8');
+      }
+    }
   }));
   
   console.log("✅ Serving static files from frontend/dist");
@@ -461,6 +470,31 @@ app.use((req, res) => {
   // CRITICAL: Check for API routes FIRST - if we reach here for an API route,
   // it means the route wasn't registered or doesn't match
   const isApiRoute = req.path.startsWith("/api") || req.path.startsWith("/uploads");
+  
+  // CRITICAL: Check for static asset requests (JS, CSS, images, etc.)
+  // These should have been handled by express.static, but if they reach here,
+  // it means the file doesn't exist - try to serve from root anyway
+  const pathWithoutQuery = req.path.split('?')[0];
+  const hasExtension = /\.[^/]+$/.test(pathWithoutQuery);
+  const isStaticAsset = hasExtension && (
+    pathWithoutQuery.startsWith("/assets/") ||
+    pathWithoutQuery.startsWith("/vite.svg") ||
+    pathWithoutQuery.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$/i)
+  );
+  
+  // If it's a static asset request that wasn't found, try to serve it from root
+  if (isStaticAsset && existsSync(frontendBuildPath)) {
+    const assetPath = path.join(frontendBuildPath, pathWithoutQuery);
+    if (existsSync(assetPath)) {
+      return res.sendFile(path.resolve(assetPath));
+    }
+    // If asset not found, return 404 for assets (don't serve index.html)
+    return res.status(404).json({
+      error: "Asset not found",
+      path: req.path,
+      message: `The requested asset '${req.path}' does not exist.`
+    });
+  }
   
   if (isApiRoute) {
     console.error(`❌ API/Upload route not found: ${req.method} ${req.path}`);
