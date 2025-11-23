@@ -494,14 +494,16 @@ app.get("/api/test/reminders", async (req, res) => {
 // CRITICAL: This MUST be the absolute last middleware - placed AFTER all API routes
 // This fixes 404 errors when reloading pages with client-side routing
 // The handler serves index.html for all non-API routes, allowing React Router to handle routing
-app.get('*', (req, res) => {
+// Using app.use() instead of app.get('*') to avoid path-to-regexp errors
+app.use((req, res, next) => {
+  // Only handle GET and HEAD requests for client-side routes
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    return next();
+  }
+  
   // CRITICAL: Skip API routes and uploads - these should be handled by API routes above
   if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
-    return res.status(404).json({
-      error: "API route not found",
-      path: req.path,
-      method: req.method,
-    });
+    return next();
   }
   
   // Skip static assets (they should be handled by express.static above)
@@ -511,10 +513,12 @@ app.get('*', (req, res) => {
     pathWithoutQuery.startsWith('/assets/') ||
     pathWithoutQuery.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|json)$/i)
   )) {
-    return res.status(404).json({
-      error: "Asset not found",
-      path: req.path,
-    });
+    return next();
+  }
+  
+  // For HEAD requests (health checks), just return 200 OK
+  if (req.method === 'HEAD') {
+    return res.status(200).end();
   }
   
   // Log the request for debugging (only in production to help diagnose issues)
@@ -568,6 +572,9 @@ app.get('*', (req, res) => {
       </html>
     `);
   }
+  
+  // If we get here, something went wrong - call next to let the final handler catch it
+  next();
 });
 
 // ✅ Final 404 handler for unmatched routes (non-GET requests, API routes, etc.)
