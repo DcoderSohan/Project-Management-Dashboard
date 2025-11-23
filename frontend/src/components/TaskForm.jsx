@@ -102,8 +102,8 @@ export default function TaskForm({
     try {
       let attachmentUrls = Array.isArray(form.attachments) ? [...form.attachments] : [];
       
-      // Upload new files if any
-      if (selectedFiles.length > 0) {
+      // Upload new files if any (only for main tasks, not subtasks)
+      if (selectedFiles.length > 0 && !form.parentTaskId) {
         console.log("Uploading files:", selectedFiles.map(f => f.name));
         try {
           const urls = await uploadFiles(selectedFiles);
@@ -117,6 +117,11 @@ export default function TaskForm({
           alert(`File upload failed: ${errorMessage}\n\nTask will be saved without the new attachments.`);
           // Continue with saving the task even if file upload fails
         }
+      }
+      
+      // Clear attachments for subtasks
+      if (form.parentTaskId) {
+        attachmentUrls = [];
       }
 
       // Build payload with attachment URLs
@@ -267,46 +272,49 @@ export default function TaskForm({
         </label>
       </div>
 
-      <label className="block mb-2">
-        <span>Attachments (optional) - PDF and Documents only</span>
-        <input
-          type="file"
-          multiple
-          accept=".pdf,.doc,.docx"
-          onChange={onFileChange}
-          className="mt-1 block w-full p-2 border rounded"
-          disabled={uploading}
-        />
-        <small className="text-gray-500 block mt-1">
-          Accepted formats: PDF, DOC, DOCX (Max 5 files, 10MB each)
-        </small>
-        {selectedFiles.length > 0 && (
-          <div className="mt-2 p-2 bg-blue-50 rounded">
-            <small className="text-blue-700 block font-medium">
-              {selectedFiles.length} file(s) selected:
-            </small>
-            <ul className="mt-1 text-sm text-blue-600">
-              {selectedFiles.map((file, idx) => (
-                <li key={`selected-${file.name}-${idx}`}>• {file.name} ({(file.size / 1024).toFixed(1)} KB)</li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {form.attachments && form.attachments.length > 0 && (
-          <div className="mt-2">
-            <small className="text-gray-600 block mb-1">Existing attachments:</small>
-            <ul className="list-disc list-inside text-sm text-gray-500">
-              {form.attachments.map((url, idx) => (
-                <li key={`attachment-${url}-${idx}`}>
-                  <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                    Attachment {idx + 1}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </label>
+      {/* Only show attachments for main tasks, not subtasks */}
+      {!form.parentTaskId && (
+        <label className="block mb-2">
+          <span>Attachments (optional) - PDF and Documents only</span>
+          <input
+            type="file"
+            multiple
+            accept=".pdf,.doc,.docx"
+            onChange={onFileChange}
+            className="mt-1 block w-full p-2 border rounded"
+            disabled={uploading}
+          />
+          <small className="text-gray-500 block mt-1">
+            Accepted formats: PDF, DOC, DOCX (Max 5 files, 10MB each)
+          </small>
+          {selectedFiles.length > 0 && (
+            <div className="mt-2 p-2 bg-blue-50 rounded">
+              <small className="text-blue-700 block font-medium">
+                {selectedFiles.length} file(s) selected:
+              </small>
+              <ul className="mt-1 text-sm text-blue-600">
+                {selectedFiles.map((file, idx) => (
+                  <li key={`selected-${file.name}-${idx}`}>• {file.name} ({(file.size / 1024).toFixed(1)} KB)</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {form.attachments && form.attachments.length > 0 && (
+            <div className="mt-2">
+              <small className="text-gray-600 block mb-1">Existing attachments:</small>
+              <ul className="list-disc list-inside text-sm text-gray-500">
+                {form.attachments.map((url, idx) => (
+                  <li key={`attachment-${url}-${idx}`}>
+                    <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                      Attachment {idx + 1}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </label>
+      )}
 
       <div className="flex justify-end gap-2 mt-4">
         <button

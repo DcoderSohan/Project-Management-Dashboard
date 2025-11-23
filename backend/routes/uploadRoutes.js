@@ -6,6 +6,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
 import dotenv from "dotenv";
+import { verifyToken } from "../controllers/authController.js";
 dotenv.config({ quiet: true }); // Suppress dotenv tips
 
 const __filename = fileURLToPath(import.meta.url);
@@ -103,8 +104,8 @@ router.get("/test", (req, res) => {
   });
 });
 
-// Upload endpoint with proper error handling
-router.post("/", (req, res, next) => {
+// Upload endpoint with proper error handling (requires authentication)
+router.post("/", verifyToken, (req, res, next) => {
   console.log("=== UPLOAD REQUEST RECEIVED ===");
   console.log("Request method:", req.method);
   console.log("Request path:", req.path);

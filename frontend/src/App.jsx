@@ -12,7 +12,6 @@ import Login from "./pages/Auth/Login";
 import SignUp from "./pages/Auth/SignUp";
 import Profile from "./pages/Profile";
 import UserManagement from "./pages/UserManagement";
-import FileManagement from "./pages/FileManagement";
 
 function App() {
   return (
@@ -79,14 +78,6 @@ function App() {
         />
         
         {/* Admin-only routes */}
-        <Route
-          path="/file-management"
-          element={
-            <AdminRoute>
-              <FileManagement />
-            </AdminRoute>
-          }
-        />
         <Route
           path="/logged-in-users"
           element={
