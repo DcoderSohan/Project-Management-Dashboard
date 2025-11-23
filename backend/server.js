@@ -133,21 +133,39 @@ if (existsSync(frontendBuildPath)) {
   }));
   
   // Serve other static files (vite.svg, etc.) from root
-  app.use(express.static(frontendBuildPath, { 
-    fallthrough: true, // Continue to next middleware if file doesn't exist
-    index: false, // Don't serve index.html automatically
-    maxAge: '1d', // Cache static assets for 1 day
-    etag: true, // Enable ETag for caching
-    lastModified: true, // Enable Last-Modified header
-    setHeaders: (res, filePath) => {
-      // Set proper content type headers
-      if (filePath.endsWith('.js')) {
-        res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-      } else if (filePath.endsWith('.css')) {
-        res.setHeader('Content-Type', 'text/css; charset=utf-8');
-      }
+  // Wrap in middleware to ensure proper fallthrough behavior
+  app.use((req, res, next) => {
+    // Skip API routes and uploads
+    if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
+      return next();
     }
-  }));
+    
+    // Check if it's a static file request (has file extension)
+    const pathWithoutQuery = req.path.split('?')[0];
+    const hasFileExtension = /\.[^/]+$/.test(pathWithoutQuery);
+    
+    // Only try to serve static files if it has an extension
+    if (hasFileExtension) {
+      express.static(frontendBuildPath, { 
+        fallthrough: true, // Continue to next middleware if file doesn't exist
+        index: false, // Don't serve index.html automatically
+        maxAge: '1d', // Cache static assets for 1 day
+        etag: true, // Enable ETag for caching
+        lastModified: true, // Enable Last-Modified header
+        setHeaders: (res, filePath) => {
+          // Set proper content type headers
+          if (filePath.endsWith('.js')) {
+            res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+          } else if (filePath.endsWith('.css')) {
+            res.setHeader('Content-Type', 'text/css; charset=utf-8');
+          }
+        }
+      })(req, res, next);
+    } else {
+      // Not a static file request, pass to next middleware
+      next();
+    }
+  });
   
   console.log("✅ Serving static files from frontend/dist");
   console.log(`✅ Serving /assets from ${path.join(frontendBuildPath, 'assets')}`);
@@ -495,14 +513,15 @@ app.get("/api/test/reminders", async (req, res) => {
 // CRITICAL: This MUST be the absolute last middleware - placed AFTER all API routes
 // This fixes 404 errors when reloading pages with client-side routing
 // The handler serves index.html for all non-API routes, allowing React Router to handle routing
-app.use((req, res) => {
+app.use((req, res, next) => {
+  // Only handle GET and HEAD requests for client-side routes
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    return next();
+  }
+  
   // CRITICAL: Skip API routes and uploads - these should be handled by API routes above
   if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
-    return res.status(404).json({
-      error: "API route not found",
-      path: req.path,
-      method: req.method,
-    });
+    return next();
   }
   
   // Skip static assets - these should be handled by express.static above
@@ -524,7 +543,7 @@ app.use((req, res) => {
     return res.status(200).end();
   }
   
-  // For ALL other requests (including GET), serve index.html
+  // For ALL other GET requests (client-side routes like /tasks, /users, etc.), serve index.html
   // This allows React Router to handle the routing on the client side
   if (existsSync(frontendIndexPath)) {
     const resolvedPath = path.resolve(frontendIndexPath);
@@ -549,17 +568,63 @@ app.use((req, res) => {
     });
   }
   
-  // Frontend build not found
-  return res.status(503).send(`
-    <html>
-      <head><title>Frontend Not Built</title></head>
-      <body>
-        <h1>Frontend Not Built</h1>
-        <p>The frontend build is missing. Please build the frontend first.</p>
-        <p>Path: ${req.path}</p>
-      </body>
-    </html>
-  `);
+  // Frontend build not found - call next to let final handler catch it
+  return next();
+});
+
+// ✅ Final 404 handler for unmatched routes (non-GET requests, API routes, etc.)
+app.use((req, res) => {
+  // Handle API routes that don't exist
+  if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
+    return res.status(404).json({
+      error: "API route not found",
+      path: req.path,
+      method: req.method,
+    });
+  }
+  
+  // Handle missing static files
+  const pathWithoutQuery = req.path.split('?')[0];
+  const hasFileExtension = /\.[^/]+$/.test(pathWithoutQuery);
+  if (hasFileExtension) {
+    return res.status(404).json({
+      error: "Asset not found",
+      path: req.path,
+    });
+  }
+  
+  // For HEAD requests, just return 200 OK
+  if (req.method === 'HEAD') {
+    return res.status(200).end();
+  }
+  
+  // For all other requests (including GET), try to serve index.html as fallback
+  // This ensures React Router can handle client-side routing even if catch-all missed it
+  if (existsSync(frontendIndexPath)) {
+    const resolvedPath = path.resolve(frontendIndexPath);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    return res.sendFile(resolvedPath, (err) => {
+      if (err && !res.headersSent) {
+        console.error(`❌ Error serving index.html in final handler for ${req.path}:`, err.message);
+        return res.status(500).json({
+          error: "Error serving frontend",
+          path: req.path,
+          message: err.message
+        });
+      }
+    });
+  }
+  
+  // Final fallback for truly unmatched routes
+  return res.status(404).json({
+    error: "Route not found",
+    path: req.path,
+    method: req.method,
+    message: "The requested route does not exist and frontend build is not available."
+  });
 });
 
 
