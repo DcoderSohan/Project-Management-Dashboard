@@ -116,23 +116,30 @@ if (process.env.NODE_ENV === 'development') {
 
 // Check if frontend build exists and serve static files
 if (existsSync(frontendBuildPath)) {
+  const assetsPath = path.join(frontendBuildPath, 'assets');
+  
   // CRITICAL: Serve static assets with explicit path matching
   // This ensures assets are ALWAYS served from root, regardless of current route
   // Serve assets directory explicitly to catch all asset requests
   // Use fallthrough: false so missing assets return 404 immediately
-  app.use('/assets', express.static(path.join(frontendBuildPath, 'assets'), {
-    fallthrough: false, // Return 404 if file doesn't exist, don't pass to next middleware
-    maxAge: '1d',
-    etag: true,
-    lastModified: true,
-    setHeaders: (res, filePath) => {
-      if (filePath.endsWith('.js')) {
-        res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-      } else if (filePath.endsWith('.css')) {
-        res.setHeader('Content-Type', 'text/css; charset=utf-8');
+  if (existsSync(assetsPath)) {
+    app.use('/assets', express.static(assetsPath, {
+      fallthrough: false, // Return 404 if file doesn't exist, don't pass to next middleware
+      maxAge: '1d',
+      etag: true,
+      lastModified: true,
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.js')) {
+          res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+        } else if (filePath.endsWith('.css')) {
+          res.setHeader('Content-Type', 'text/css; charset=utf-8');
+        }
       }
-    }
-  }));
+    }));
+    console.log(`✅ Assets directory found at: ${assetsPath}`);
+  } else {
+    console.warn(`⚠️ Assets directory not found at: ${assetsPath}`);
+  }
   
   // Serve other static files (vite.svg, etc.) from root
   // Use fallthrough: true so it passes to next middleware if file doesn't exist
