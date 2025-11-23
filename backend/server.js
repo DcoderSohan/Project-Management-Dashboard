@@ -165,6 +165,7 @@ app.get("/", (req, res) => {
   if (existsSync(frontendIndexPath)) {
     const resolvedPath = path.resolve(frontendIndexPath);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     return res.sendFile(resolvedPath);
   }
   res.status(503).send(`
@@ -494,150 +495,73 @@ app.get("/api/test/reminders", async (req, res) => {
 // CRITICAL: This MUST be the absolute last middleware - placed AFTER all API routes
 // This fixes 404 errors when reloading pages with client-side routing
 // The handler serves index.html for all non-API routes, allowing React Router to handle routing
-// Using app.use() instead of app.get('*') to avoid path-to-regexp errors
-app.use((req, res, next) => {
-  try {
-    // Only handle GET and HEAD requests for client-side routes
-    if (req.method !== 'GET' && req.method !== 'HEAD') {
-      return next();
-    }
-    
-    // CRITICAL: Skip API routes and uploads - these should be handled by API routes above
-    if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
-      return next();
-    }
-    
-    // Skip static assets (they should be handled by express.static above)
-    const pathWithoutQuery = req.path.split('?')[0];
-    const hasFileExtension = /\.[^/]+$/.test(pathWithoutQuery);
-    if (hasFileExtension && (
-      pathWithoutQuery.startsWith('/assets/') ||
-      pathWithoutQuery.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|json)$/i)
-    )) {
-      return next();
-    }
-    
-    // For HEAD requests (health checks), just return 200 OK
-    if (req.method === 'HEAD') {
-      return res.status(200).end();
-    }
-    
-    // For ALL other GET requests (client-side routes), serve index.html
-    // This allows React Router to handle the routing on the client side
-    if (existsSync(frontendIndexPath)) {
-      const resolvedPath = path.resolve(frontendIndexPath);
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
-      return res.sendFile(resolvedPath, (err) => {
-        if (err && !res.headersSent) {
-          console.error(`❌ Error serving index.html for ${req.path}:`, err.message);
-          return res.status(500).send(`
-            <html>
-              <head><title>Error</title></head>
-              <body>
-                <h1>Error serving frontend</h1>
-                <p>${err.message}</p>
-                <p>Path: ${req.path}</p>
-              </body>
-            </html>
-          `);
-        }
-      });
-    }
-    
-    // Frontend build not found - call next to let final handler catch it
-    return next();
-  } catch (error) {
-    console.error(`❌ Error in catch-all handler for ${req.path}:`, error.message);
-    if (!res.headersSent) {
-      return res.status(500).send(`
-        <html>
-          <head><title>Server Error</title></head>
-          <body>
-            <h1>Server Error</h1>
-            <p>An error occurred while processing your request.</p>
-            <p>Path: ${req.path}</p>
-          </body>
-        </html>
-      `);
-    }
-    return next();
-  }
-});
-
-// ✅ Final 404 handler for unmatched routes (non-GET requests, API routes, etc.)
 app.use((req, res) => {
-  try {
-    // Handle API routes that don't exist
-    if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
-      return res.status(404).json({
-        error: "API route not found",
-        path: req.path,
-        method: req.method,
-        message: `The requested API endpoint '${req.method} ${req.path}' does not exist.`,
-        availableEndpoints: {
-          health: "GET /api/health",
-          routes: "GET /api/routes",
-        }
-      });
-    }
-    
-    // Handle missing static files
-    const pathWithoutQuery = req.path.split('?')[0];
-    const hasFileExtension = /\.[^/]+$/.test(pathWithoutQuery);
-    if (hasFileExtension) {
-      return res.status(404).json({
-        error: "Asset not found",
-        path: req.path,
-        message: `The requested asset '${req.path}' does not exist.`
-      });
-    }
-    
-    // For HEAD requests, just return 200 OK
-    if (req.method === 'HEAD') {
-      return res.status(200).end();
-    }
-    
-    // For all other requests (including GET), try to serve index.html as fallback
-    // This ensures React Router can handle client-side routing even if catch-all missed it
-    if (existsSync(frontendIndexPath)) {
-      const resolvedPath = path.resolve(frontendIndexPath);
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
-      return res.sendFile(resolvedPath, (err) => {
-        if (err && !res.headersSent) {
-          console.error(`❌ Error serving index.html in final handler for ${req.path}:`, err.message);
-          return res.status(500).json({
-            error: "Error serving frontend",
-            path: req.path,
-            message: err.message
-          });
-        }
-      });
-    }
-    
-    // If we can't serve index.html, return 404
+  // CRITICAL: Skip API routes and uploads - these should be handled by API routes above
+  if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
     return res.status(404).json({
-      error: "Route not found",
+      error: "API route not found",
       path: req.path,
       method: req.method,
-      message: "The requested route does not exist."
     });
-  } catch (error) {
-    console.error(`❌ Error in final 404 handler for ${req.path}:`, error.message);
-    if (!res.headersSent) {
-      return res.status(500).json({
-        error: "Internal server error",
-        path: req.path,
-        message: error.message
-      });
-    }
   }
+  
+  // Skip static assets - these should be handled by express.static above
+  // But if they reach here, they don't exist, so return 404
+  const pathWithoutQuery = req.path.split('?')[0];
+  const hasFileExtension = /\.[^/]+$/.test(pathWithoutQuery);
+  if (hasFileExtension && (
+    pathWithoutQuery.startsWith('/assets/') ||
+    pathWithoutQuery.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|json)$/i)
+  )) {
+    return res.status(404).json({
+      error: "Asset not found",
+      path: req.path,
+    });
+  }
+  
+  // For HEAD requests (health checks), just return 200 OK
+  if (req.method === 'HEAD') {
+    return res.status(200).end();
+  }
+  
+  // For ALL other requests (including GET), serve index.html
+  // This allows React Router to handle the routing on the client side
+  if (existsSync(frontendIndexPath)) {
+    const resolvedPath = path.resolve(frontendIndexPath);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    return res.sendFile(resolvedPath, (err) => {
+      if (err && !res.headersSent) {
+        console.error(`❌ Error serving index.html for ${req.path}:`, err.message);
+        return res.status(500).send(`
+          <html>
+            <head><title>Error</title></head>
+            <body>
+              <h1>Error serving frontend</h1>
+              <p>${err.message}</p>
+              <p>Path: ${req.path}</p>
+            </body>
+          </html>
+        `);
+      }
+    });
+  }
+  
+  // Frontend build not found
+  return res.status(503).send(`
+    <html>
+      <head><title>Frontend Not Built</title></head>
+      <body>
+        <h1>Frontend Not Built</h1>
+        <p>The frontend build is missing. Please build the frontend first.</p>
+        <p>Path: ${req.path}</p>
+      </body>
+    </html>
+  `);
 });
+
 
 //6. Define server PORT (from .env or fallback to 5000)
 const PORT = process.env.PORT || 5000;
