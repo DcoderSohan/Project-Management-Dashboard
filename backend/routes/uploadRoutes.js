@@ -106,6 +106,19 @@ router.get("/test", (req, res) => {
 
 // Upload endpoint with proper error handling (requires authentication)
 router.post("/", verifyToken, (req, res, next) => {
+  // If verifyToken failed, it already sent a response, so just return
+  if (res.headersSent) {
+    return;
+  }
+  
+  // Check if user is authenticated
+  if (!req.user) {
+    return res.status(401).json({ 
+      error: "Authentication required", 
+      message: "Please login to upload files" 
+    });
+  }
+  
   console.log("=== UPLOAD REQUEST RECEIVED ===");
   console.log("Request method:", req.method);
   console.log("Request path:", req.path);
@@ -123,6 +136,12 @@ router.post("/", verifyToken, (req, res, next) => {
       console.error("Error type:", err.constructor.name);
       console.error("Error message:", err.message);
       console.error("Error stack:", err.stack);
+      
+      // Check if response was already sent
+      if (res.headersSent) {
+        console.error("⚠️ Response already sent, cannot send error response");
+        return;
+      }
       
       // Handle multer errors
       if (err instanceof multer.MulterError) {
@@ -173,6 +192,11 @@ router.post("/", verifyToken, (req, res, next) => {
         });
       }
       // Handle other errors
+      // Check if response was already sent
+      if (res.headersSent) {
+        console.error("⚠️ Response already sent, cannot send error response");
+        return;
+      }
       return res.status(500).json({ 
         error: "Upload failed", 
         message: err.message || "Unknown error occurred",
@@ -252,6 +276,12 @@ router.post("/", verifyToken, (req, res, next) => {
       console.error("Error type:", error.constructor.name);
       console.error("Error message:", error.message);
       console.error("Error stack:", error.stack);
+      
+      // Check if response was already sent
+      if (res.headersSent) {
+        console.error("⚠️ Response already sent, cannot send error response");
+        return;
+      }
       
       // Don't expose stack trace in production
       const errorResponse = {
