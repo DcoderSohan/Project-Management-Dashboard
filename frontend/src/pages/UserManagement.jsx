@@ -69,10 +69,10 @@ export default function UserManagement() {
       setError(errorMessage);
       setUsers([]);
       
-      // If it's a 401/403, redirect to login
+      // If it's a 401/403, redirect to signup
       if (error.response?.status === 401 || error.response?.status === 403) {
         setTimeout(() => {
-          window.location.href = "/login";
+          window.location.href = "/signup";
         }, 2000);
       }
     } finally {

@@ -1,5 +1,5 @@
 import "./App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminRoute from "./components/AdminRoute";
 import Dashboard from "./pages/Dashboard";
@@ -94,6 +94,9 @@ function App() {
             </AdminRoute>
           }
         />
+        
+        {/* Catch-all route - redirect to signup for any unmatched routes */}
+        <Route path="*" element={<Navigate to="/signup" replace />} />
           </Routes>
         </BrowserRouter>
   );

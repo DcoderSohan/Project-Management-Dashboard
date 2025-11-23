@@ -16,9 +16,9 @@ export default function AdminRoute({ children }) {
     );
   }
 
-  // Redirect to login if not authenticated
+  // Redirect to signup if not authenticated
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/signup" replace />;
   }
 
   // Check if user is admin - only admin can access admin-only routes

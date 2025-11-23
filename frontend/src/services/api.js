@@ -114,10 +114,10 @@ api.interceptors.response.use(
     }
     
     if (error.response?.status === 401) {
-      // Token expired or invalid, clear it and redirect to login
+      // Token expired or invalid, clear it and redirect to signup
       localStorage.removeItem("authToken");
       if (window.location.pathname !== "/login" && window.location.pathname !== "/signup") {
-        window.location.href = "/login";
+        window.location.href = "/signup";
       }
     }
     return Promise.reject(error);
