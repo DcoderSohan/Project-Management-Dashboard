@@ -102,8 +102,9 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads"), {
 }));
 
 // ✅ Serve static files from React app build (for production)
-const frontendBuildPath = path.join(__dirname, "..", "frontend", "dist");
-const frontendIndexPath = path.join(frontendBuildPath, "index.html");
+// Handle both development and production paths
+const frontendBuildPath = path.resolve(__dirname, "..", "frontend", "dist");
+const frontendIndexPath = path.resolve(frontendBuildPath, "index.html");
 
 // Log build path for debugging (only in development)
 if (process.env.NODE_ENV === 'development') {
@@ -158,10 +159,24 @@ if (existsSync(frontendBuildPath)) {
   console.warn(`   In production, make sure to build the frontend first.`);
 }
 
-//5. Basic test route
-// app.get("/", (req, res) => {
-//   res.send("Backend server is running successfully!");
-// });
+//5. Root route - serve index.html for root path
+// This ensures the root path works correctly
+app.get("/", (req, res) => {
+  if (existsSync(frontendIndexPath)) {
+    const resolvedPath = path.resolve(frontendIndexPath);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.sendFile(resolvedPath);
+  }
+  res.status(503).send(`
+    <html>
+      <head><title>Frontend Not Built</title></head>
+      <body>
+        <h1>Frontend Not Built</h1>
+        <p>The frontend build is missing. Please build the frontend first.</p>
+      </body>
+    </html>
+  `);
+});
 
 // ✅ Add request logging middleware for API routes (before route registration)
 app.use((req, res, next) => {
@@ -479,10 +494,14 @@ app.get("/api/test/reminders", async (req, res) => {
 // CRITICAL: This MUST be the absolute last middleware - placed AFTER all API routes
 // This fixes 404 errors when reloading pages with client-side routing
 // The handler serves index.html for all non-API routes, allowing React Router to handle routing
-app.use((req, res, next) => {
+app.get('*', (req, res) => {
   // CRITICAL: Skip API routes and uploads - these should be handled by API routes above
   if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
-    return next(); // Let 404 handler catch API routes that don't exist
+    return res.status(404).json({
+      error: "API route not found",
+      path: req.path,
+      method: req.method,
+    });
   }
   
   // Skip static assets (they should be handled by express.static above)
@@ -492,21 +511,19 @@ app.use((req, res, next) => {
     pathWithoutQuery.startsWith('/assets/') ||
     pathWithoutQuery.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|json)$/i)
   )) {
-    return next(); // Let 404 handler catch missing static files
+    return res.status(404).json({
+      error: "Asset not found",
+      path: req.path,
+    });
   }
   
-  // Only handle GET and HEAD requests for client-side routes
-  // All other methods (POST, PUT, DELETE, etc.) should go to API routes
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
-    return next(); // Let 404 handler catch non-GET requests
+  // Log the request for debugging (only in production to help diagnose issues)
+  if (process.env.NODE_ENV === 'production') {
+    console.log(`🔍 Serving index.html for client-side route: ${req.path}`);
   }
   
-  // For HEAD requests (health checks), just return 200 OK
-  if (req.method === 'HEAD') {
-    return res.status(200).end();
-  }
-  
-  // For GET requests to client-side routes, serve index.html to enable React Router
+  // For ALL other GET requests (client-side routes), serve index.html
+  // This allows React Router to handle the routing on the client side
   if (existsSync(frontendIndexPath)) {
     const resolvedPath = path.resolve(frontendIndexPath);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -516,26 +533,44 @@ app.use((req, res, next) => {
     return res.sendFile(resolvedPath, (err) => {
       if (err && !res.headersSent) {
         console.error(`❌ Error serving index.html for ${req.path}:`, err.message);
-        return res.status(500).json({
-          error: "Error serving frontend",
-          message: err.message,
-          path: req.path,
-        });
+        console.error(`   Frontend index path: ${frontendIndexPath}`);
+        console.error(`   Frontend index exists: ${existsSync(frontendIndexPath)}`);
+        return res.status(500).send(`
+          <html>
+            <head><title>Error</title></head>
+            <body>
+              <h1>Error serving frontend</h1>
+              <p>${err.message}</p>
+              <p>Path: ${req.path}</p>
+            </body>
+          </html>
+        `);
       }
     });
   }
   
-  // Frontend build not found
+  // Frontend build not found - still try to serve a helpful error page
+  console.error(`❌ Frontend build not found at: ${frontendIndexPath}`);
+  console.error(`   Requested path: ${req.path}`);
+  console.error(`   Build path: ${frontendBuildPath}`);
+  console.error(`   Build exists: ${existsSync(frontendBuildPath)}`);
+  console.error(`   Index exists: ${existsSync(frontendIndexPath)}`);
   if (!res.headersSent) {
-    return res.status(503).json({
-      error: "Frontend not built",
-      message: "The frontend build is missing. Please build the frontend first.",
-      path: req.path,
-    });
+    return res.status(503).send(`
+      <html>
+        <head><title>Frontend Not Built</title></head>
+        <body>
+          <h1>Frontend Not Built</h1>
+          <p>The frontend build is missing. Please build the frontend first.</p>
+          <p>Path: ${req.path}</p>
+          <p>Build path: ${frontendBuildPath}</p>
+        </body>
+      </html>
+    `);
   }
 });
 
-// ✅ Final 404 handler for unmatched routes (API routes, missing static files, etc.)
+// ✅ Final 404 handler for unmatched routes (non-GET requests, API routes, etc.)
 app.use((req, res) => {
   // Handle API routes that don't exist
   if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
@@ -562,8 +597,21 @@ app.use((req, res) => {
     });
   }
   
-  // For non-GET requests to non-API routes
+  // For non-GET requests to non-API routes, try to serve index.html anyway
+  // This handles POST/PUT/DELETE requests that might be misrouted
   if (req.method !== 'GET' && req.method !== 'HEAD') {
+    // For HEAD requests, just return 200 OK
+    if (req.method === 'HEAD') {
+      return res.status(200).end();
+    }
+    
+    // For other methods, try to serve index.html (React Router will handle it)
+    if (existsSync(frontendIndexPath)) {
+      const resolvedPath = path.resolve(frontendIndexPath);
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.sendFile(resolvedPath);
+    }
+    
     return res.status(404).json({
       error: "Route not found",
       path: req.path,
@@ -572,7 +620,14 @@ app.use((req, res) => {
     });
   }
   
-  // Final fallback - should not reach here if catch-all is working
+  // Final fallback for GET requests - should not reach here if catch-all is working
+  // But if it does, try to serve index.html
+  if (existsSync(frontendIndexPath)) {
+    const resolvedPath = path.resolve(frontendIndexPath);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.sendFile(resolvedPath);
+  }
+  
   return res.status(404).json({
     error: "Route not found",
     path: req.path,
