@@ -119,7 +119,9 @@ if (existsSync(frontendBuildPath)) {
   // CRITICAL: Serve static assets with explicit path matching
   // This ensures assets are ALWAYS served from root, regardless of current route
   // Serve assets directory explicitly to catch all asset requests
+  // Use fallthrough: false so missing assets return 404 immediately
   app.use('/assets', express.static(path.join(frontendBuildPath, 'assets'), {
+    fallthrough: false, // Return 404 if file doesn't exist, don't pass to next middleware
     maxAge: '1d',
     etag: true,
     lastModified: true,
@@ -133,39 +135,22 @@ if (existsSync(frontendBuildPath)) {
   }));
   
   // Serve other static files (vite.svg, etc.) from root
-  // Wrap in middleware to ensure proper fallthrough behavior
-  app.use((req, res, next) => {
-    // Skip API routes and uploads
-    if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
-      return next();
+  // Use fallthrough: true so it passes to next middleware if file doesn't exist
+  app.use(express.static(frontendBuildPath, { 
+    fallthrough: true, // Continue to next middleware if file doesn't exist
+    index: false, // Don't serve index.html automatically
+    maxAge: '1d', // Cache static assets for 1 day
+    etag: true, // Enable ETag for caching
+    lastModified: true, // Enable Last-Modified header
+    setHeaders: (res, filePath) => {
+      // Set proper content type headers
+      if (filePath.endsWith('.js')) {
+        res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+      } else if (filePath.endsWith('.css')) {
+        res.setHeader('Content-Type', 'text/css; charset=utf-8');
+      }
     }
-    
-    // Check if it's a static file request (has file extension)
-    const pathWithoutQuery = req.path.split('?')[0];
-    const hasFileExtension = /\.[^/]+$/.test(pathWithoutQuery);
-    
-    // Only try to serve static files if it has an extension
-    if (hasFileExtension) {
-      express.static(frontendBuildPath, { 
-        fallthrough: true, // Continue to next middleware if file doesn't exist
-        index: false, // Don't serve index.html automatically
-        maxAge: '1d', // Cache static assets for 1 day
-        etag: true, // Enable ETag for caching
-        lastModified: true, // Enable Last-Modified header
-        setHeaders: (res, filePath) => {
-          // Set proper content type headers
-          if (filePath.endsWith('.js')) {
-            res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-          } else if (filePath.endsWith('.css')) {
-            res.setHeader('Content-Type', 'text/css; charset=utf-8');
-          }
-        }
-      })(req, res, next);
-    } else {
-      // Not a static file request, pass to next middleware
-      next();
-    }
-  });
+  }));
   
   console.log("✅ Serving static files from frontend/dist");
   console.log(`✅ Serving /assets from ${path.join(frontendBuildPath, 'assets')}`);
@@ -524,14 +509,20 @@ app.use((req, res, next) => {
     return next();
   }
   
-  // Skip static assets - these should be handled by express.static above
-  // But if they reach here, they don't exist, so return 404
+  // Check if it's a static asset request
   const pathWithoutQuery = req.path.split('?')[0];
   const hasFileExtension = /\.[^/]+$/.test(pathWithoutQuery);
+  
+  // If it's a static asset request that reached here, the file doesn't exist
+  // Return 404 for missing static assets
   if (hasFileExtension && (
     pathWithoutQuery.startsWith('/assets/') ||
     pathWithoutQuery.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|json)$/i)
   )) {
+    // Log missing asset for debugging
+    if (process.env.NODE_ENV === 'development') {
+      console.warn(`⚠️ Static asset not found: ${req.path}`);
+    }
     return res.status(404).json({
       error: "Asset not found",
       path: req.path,
