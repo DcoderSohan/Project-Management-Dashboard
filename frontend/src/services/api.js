@@ -4,7 +4,18 @@ import axios from "axios";
 const getBaseURL = () => {
   // Priority 1: Use environment variable (required in production)
   if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL;
+    // Normalize and ensure it points to the /api root
+    let envUrl = String(import.meta.env.VITE_API_URL).trim();
+
+    // Remove any trailing slashes
+    envUrl = envUrl.replace(/\/+$/, "");
+
+    // If it doesn't already end with /api, append it
+    if (!envUrl.toLowerCase().endsWith("/api")) {
+      envUrl = `${envUrl}/api`;
+    }
+
+    return envUrl;
   }
   
   // Priority 2: In production, try to construct from current origin
