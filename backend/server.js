@@ -506,15 +506,17 @@ app.get("/api/test/reminders", async (req, res) => {
 // CRITICAL: This MUST be the absolute last route handler - placed AFTER all API routes
 // This fixes 404 errors when reloading pages or directly accessing routes like /signup, /tasks, etc.
 // The handler serves index.html for all non-API routes, allowing React Router to handle routing
-app.get("*", (req, res) => {
+// Using app.use() instead of app.get("*") for compatibility with Express/path-to-regexp
+app.use((req, res, next) => {
+  // Only handle GET and HEAD requests for client-side routes
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    return next();
+  }
+  
   // CRITICAL: Skip API routes and uploads - these should be handled by API routes above
   // This check ensures API routes are never rewritten to index.html
   if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
-    return res.status(404).json({
-      error: "API route not found",
-      path: req.path,
-      method: req.method,
-    });
+    return next();
   }
   
   // Check if it's a static asset request
@@ -567,17 +569,8 @@ app.get("*", (req, res) => {
     });
   }
   
-  // Frontend build not found
-  return res.status(503).send(`
-    <html>
-      <head><title>Frontend Not Built</title></head>
-      <body>
-        <h1>Frontend Not Built</h1>
-        <p>The frontend build is missing. Please build the frontend first.</p>
-        <p>Path requested: ${req.path}</p>
-      </body>
-    </html>
-  `);
+  // Frontend build not found - call next to let final handler catch it
+  return next();
 });
 
 // ✅ Final 404 handler for non-GET requests (POST, PUT, DELETE, etc. to non-API routes)
@@ -608,7 +601,7 @@ app.use((req, res) => {
   }
   
   // For non-GET requests to client-side routes, return 404
-  // (GET requests are handled by the app.get("*") catch-all above)
+  // (GET requests are handled by the app.use() catch-all above)
   return res.status(404).json({
     error: "Route not found",
     path: req.path,
