@@ -502,19 +502,19 @@ app.get("/api/test/reminders", async (req, res) => {
   }
 });
 
-// ✅ PERMANENT FIX: Catch-all handler for React Router
-// CRITICAL: This MUST be the absolute last middleware - placed AFTER all API routes
-// This fixes 404 errors when reloading pages with client-side routing
+// ✅ PERMANENT FIX: Catch-all handler for React Router (Client-Side Routing)
+// CRITICAL: This MUST be the absolute last route handler - placed AFTER all API routes
+// This fixes 404 errors when reloading pages or directly accessing routes like /signup, /tasks, etc.
 // The handler serves index.html for all non-API routes, allowing React Router to handle routing
-app.use((req, res, next) => {
-  // Only handle GET and HEAD requests for client-side routes
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
-    return next();
-  }
-  
+app.get("*", (req, res) => {
   // CRITICAL: Skip API routes and uploads - these should be handled by API routes above
+  // This check ensures API routes are never rewritten to index.html
   if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
-    return next();
+    return res.status(404).json({
+      error: "API route not found",
+      path: req.path,
+      method: req.method,
+    });
   }
   
   // Check if it's a static asset request
@@ -522,7 +522,7 @@ app.use((req, res, next) => {
   const hasFileExtension = /\.[^/]+$/.test(pathWithoutQuery);
   
   // If it's a static asset request that reached here, the file doesn't exist
-  // Return 404 for missing static assets (but allow favicon.ico to pass through to prevent console errors)
+  // Return 404 for missing static assets
   if (hasFileExtension && (
     pathWithoutQuery.startsWith('/assets/') ||
     pathWithoutQuery.match(/\.(js|css|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot|json)$/i)
@@ -542,13 +542,8 @@ app.use((req, res, next) => {
     return res.status(204).end(); // 204 No Content - prevents browser from retrying
   }
   
-  // For HEAD requests (health checks), just return 200 OK
-  if (req.method === 'HEAD') {
-    return res.status(200).end();
-  }
-  
-  // For ALL other GET requests (client-side routes like /tasks, /users, etc.), serve index.html
-  // This allows React Router to handle the routing on the client side
+  // For ALL other GET requests (client-side routes like /signup, /tasks, /users, etc.), serve index.html
+  // This allows React Router (BrowserRouter) to handle the routing on the client side
   if (existsSync(frontendIndexPath)) {
     const resolvedPath = path.resolve(frontendIndexPath);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -572,11 +567,21 @@ app.use((req, res, next) => {
     });
   }
   
-  // Frontend build not found - call next to let final handler catch it
-  return next();
+  // Frontend build not found
+  return res.status(503).send(`
+    <html>
+      <head><title>Frontend Not Built</title></head>
+      <body>
+        <h1>Frontend Not Built</h1>
+        <p>The frontend build is missing. Please build the frontend first.</p>
+        <p>Path requested: ${req.path}</p>
+      </body>
+    </html>
+  `);
 });
 
-// ✅ Final 404 handler for unmatched routes (non-GET requests, API routes, etc.)
+// ✅ Final 404 handler for non-GET requests (POST, PUT, DELETE, etc. to non-API routes)
+// This handles cases where non-GET requests are made to client-side routes
 app.use((req, res) => {
   // Handle API routes that don't exist
   if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
@@ -602,32 +607,13 @@ app.use((req, res) => {
     return res.status(200).end();
   }
   
-  // For all other requests (including GET), try to serve index.html as fallback
-  // This ensures React Router can handle client-side routing even if catch-all missed it
-  if (existsSync(frontendIndexPath)) {
-    const resolvedPath = path.resolve(frontendIndexPath);
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-    return res.sendFile(resolvedPath, (err) => {
-      if (err && !res.headersSent) {
-        console.error(`❌ Error serving index.html in final handler for ${req.path}:`, err.message);
-        return res.status(500).json({
-          error: "Error serving frontend",
-          path: req.path,
-          message: err.message
-        });
-      }
-    });
-  }
-  
-  // Final fallback for truly unmatched routes
+  // For non-GET requests to client-side routes, return 404
+  // (GET requests are handled by the app.get("*") catch-all above)
   return res.status(404).json({
     error: "Route not found",
     path: req.path,
     method: req.method,
-    message: "The requested route does not exist and frontend build is not available."
+    message: "This route is handled by client-side routing. Use GET requests to access client routes."
   });
 });
 
