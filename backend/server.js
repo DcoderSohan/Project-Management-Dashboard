@@ -141,10 +141,11 @@ if (existsSync(frontendBuildPath)) {
     console.warn(`⚠️ Assets directory not found at: ${assetsPath}`);
   }
   
-  // Serve other static files (vite.svg, etc.) from root
+  // Serve other static files (vite.svg, favicon.ico, etc.) from root
   // Use fallthrough: true so it passes to next middleware if file doesn't exist
+  // This allows client-side routes like /tasks, /users, etc. to be handled by the catch-all handler
   app.use(express.static(frontendBuildPath, { 
-    fallthrough: true, // Continue to next middleware if file doesn't exist
+    fallthrough: true, // Continue to next middleware if file doesn't exist (CRITICAL for SPA routing)
     index: false, // Don't serve index.html automatically
     maxAge: '1d', // Cache static assets for 1 day
     etag: true, // Enable ETag for caching
@@ -521,10 +522,10 @@ app.use((req, res, next) => {
   const hasFileExtension = /\.[^/]+$/.test(pathWithoutQuery);
   
   // If it's a static asset request that reached here, the file doesn't exist
-  // Return 404 for missing static assets
+  // Return 404 for missing static assets (but allow favicon.ico to pass through to prevent console errors)
   if (hasFileExtension && (
     pathWithoutQuery.startsWith('/assets/') ||
-    pathWithoutQuery.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|json)$/i)
+    pathWithoutQuery.match(/\.(js|css|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot|json)$/i)
   )) {
     // Log missing asset for debugging
     if (process.env.NODE_ENV === 'development') {
@@ -534,6 +535,11 @@ app.use((req, res, next) => {
       error: "Asset not found",
       path: req.path,
     });
+  }
+  
+  // Handle favicon.ico requests - serve a minimal response to prevent 404 errors
+  if (pathWithoutQuery === '/favicon.ico') {
+    return res.status(204).end(); // 204 No Content - prevents browser from retrying
   }
   
   // For HEAD requests (health checks), just return 200 OK
